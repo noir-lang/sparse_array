@@ -1,20 +1,7 @@
-# noir-library-starter
+# sparse_array
 
-This repository is a template used by the noir-lang org when creating internally maintained libraries.
+Noir library that implements efficient sparse arrays, both constant (SparseArray) and mutable (MutSparseArray)
 
-This provides out of the box:
-
-- A simple CI setup to test and format the library
-- A canary flagging up compilation failures on nightly releases.
-- A [release-please](https://github.com/googleapis/release-please) setup to ease creating releases for the library.
-
-Feel free to use this template as a starting point to create your own Noir libraries.
-
----
-
-# LIBRARY_NAME
-
-Add a brief description of the library
 
 ## Benchmarks
 
@@ -27,11 +14,40 @@ In your _Nargo.toml_ file, add the version of this library you would like to ins
 
 ```
 [dependencies]
-LIBRARY = { tag = "v0.1.0", git = "https://github.com/noir-lang/LIBRARY_NAME" }
+sparse_array = { tag = "v0.1.0", git = "https://github.com/noir-lang/sparse_array" }
 ```
 
-## `library`
+## `sparse_array`
 
 ### Usage
 
-`PLACEHOLDER`
+```rust
+use dep::sparse_array::{SparseArray, MutSparseArray}
+
+// a sparse array of size 10,000 with 10 nonzero values
+fn example_sparse_array(nonzero_indices: [Field; 10], nonzero_values: [Field; 10]) {
+    let sparse_array_size = 10000;
+    let array: SparseArray<10, Field> = SparseArray::create(nonzero_indices, nonzero_values, sparse_array_size);
+
+    assert(array.get(999) == 12345);
+}
+
+// a mutable sparse array that can contain up to 10 nonzero values
+fn example_mut_sparse_array(initial_nonzero_indices: [Field; 9], initial_nonzero_values: [Field; 9]) {
+    let sparse_array_size = 10000;
+    let mut array: MutSparseArray<10, Field> = MutSparseArray::create(nonzero_indices, nonzero_values, sparse_array_size);
+
+    // update element 1234 to contain value 9999
+    array.set(1234, 9999);
+
+    // error, array can only contain 10 nonzero values
+    array.ser(10, 888);
+}
+```
+
+# Costs
+
+Constructing arrays is proportional to the number of nonzero entries in the array and very small ~10 gates per element (plus the cost of initializing range tables if not already done so)
+
+Reading from `SparseArray` is 14.5 gates
+Reading and writing to `MutSparseArray` is ~30 gates
