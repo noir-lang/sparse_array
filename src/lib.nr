@@ -32,7 +32,7 @@ struct MutSparseArrayBase<let N: u32, T, ComparisonFuncs> {
 
 struct U32RangeTraits {}
 
-struct MutSparseArray<let N: u32, T> {
+pub struct MutSparseArray<let N: u32, T> {
     inner: MutSparseArrayBase<N, T, U32RangeTraits>,
 }
 /**
@@ -46,7 +46,7 @@ struct MutSparseArray<let N: u32, T> {
  *        1. keys[i] maps to values[i+1]
  *        2. values[0] is an empty object. when calling `get(idx)`, if `idx` is not in `keys` we will return `values[0]`
  **/
-struct SparseArray<let N: u32, T> {
+pub struct SparseArray<let N: u32, T> {
     keys: [Field; N + 2],
     values: [T; N + 3],
     maximum: Field, // can be up to 2^32
