@@ -2,11 +2,13 @@
 
 Noir library that implements efficient sparse arrays, both constant (SparseArray) and mutable (MutSparseArray)
 
+## Noir version compatibility
+
+This library is tested with all Noir stable releases from v0.36.0.
 
 ## Benchmarks
 
 TODO
-
 
 ## Installation
 
