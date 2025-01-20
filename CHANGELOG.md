@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/noir-lang/sparse_array/compare/v0.1.0...v0.1.1) (2025-01-20)
+
+
+### Bug Fixes
+
+* Bump `noir_sort` to `v0.2.3` ([#10](https://github.com/noir-lang/sparse_array/issues/10)) ([6c17937](https://github.com/noir-lang/sparse_array/commit/6c1793732f9409baabbe2539b9063a1984092891))
+
 ## 0.1.0 (2024-10-31)
 
 
