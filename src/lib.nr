@@ -185,6 +185,14 @@ mod test {
     }
 
     #[test]
+    fn test_2() {
+        let keys = [0, 99999, 7, 4294967295];
+        let values = [123, 101112, 789, 456];
+        let example = SparseArray::create(keys, values, 0x100000000);
+        println(example);
+    }
+
+    #[test]
     fn test_sparse_lookup_boundary_cases() {
         // what about when keys[0] = 0 and keys[N-1] = 2^32 - 1?
         let example = SparseArray::create(
@@ -297,7 +305,7 @@ mod test {
                 0x00000000, 0x00000000, 0x000001f4, 0x000002bc, 0x00000384, 0x00000064, 0x00000190,
                 0x000000c8, 0x00000258, 0x000003e8, 0x0000012c, 0x00000320, 0x00000000,
             ],
-            maximum: 0x00100000,
+            maximum: 0x000fffff,
         };
 
         // sample blank space
@@ -311,6 +319,9 @@ mod test {
             let key = example_10.keys[i];
             assert(example_10.get(key) == table.get(key));
         }
+
+        // check maximum
+        assert_eq(table.maximum, example_10.maximum);
     }
 
     #[test]
@@ -341,7 +352,7 @@ mod test {
                 0x0000006f, 0x000003e7, 0x00008235, 0x00000d05, 0x00000378, 0x0000ad9c, 0x00002b67,
                 0x0000d903, 0x000008ae, 0x000001bc, 0x00000309, 0x0000270f, 0x000022b8, 0x00000000,
             ],
-            maximum: 0x00100000,
+            maximum: 0x000fffff,
         };
 
         // sample blank space
@@ -355,6 +366,9 @@ mod test {
             let key = example_25.keys[i];
             assert(example_25.get(key) == table.get(key));
         }
+
+        // check maximum
+        assert_eq(table.maximum, example_25.maximum);
     }
 
     #[test]
@@ -397,7 +411,7 @@ mod test {
                 0x00000320, 0x000004b0, 0x00000514, 0x00000a28, 0x00000514, 0x000006a4, 0x00000c1c,
                 0x00001130, 0x00000190, 0x00000d48, 0x00000000,
             ],
-            maximum: 0x00005000,
+            maximum: 0x00004fff,
         };
 
         // sample blank space
@@ -411,5 +425,8 @@ mod test {
             let key = example_50.keys[i];
             assert(example_50.get(key) == table.get(key));
         }
+
+        // check maximum
+        assert_eq(table.maximum, example_50.maximum);
     }
 }

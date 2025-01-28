@@ -47,7 +47,7 @@ where
         values: [T; N as usize],
         size: FieldElement,
     ) -> Self {
-        let maximum = size.clone();
+        let maximum = size.clone() - FieldElement::from(1u32);
 
         // Create default arrays
         let mut result = SparseArray {
@@ -269,161 +269,161 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_sparse_lookup() {
-    //     let keys = [field("1"), field("99"), field("7"), field("5")];
-    //     let example =
-    //         SparseArray::<i32, 4>::create(&keys, [123i32, 101112, 789, 456], field("100"));
+    #[test]
+    fn test_sparse_lookup() {
+        let keys = [field("1"), field("99"), field("7"), field("5")];
+        let example =
+            SparseArray::<i32, 4>::create(&keys, [123i32, 101112, 789, 456], field("100"));
 
-    //     // Test exact matches
-    //     assert_eq!(*example.get(&field("1")), 123);
-    //     assert_eq!(*example.get(&field("5")), 456);
-    //     assert_eq!(*example.get(&field("7")), 789);
-    //     assert_eq!(*example.get(&field("99")), 101112);
+        // Test exact matches
+        assert_eq!(*example.get(&field("1")), 123);
+        assert_eq!(*example.get(&field("5")), 456);
+        assert_eq!(*example.get(&field("7")), 789);
+        assert_eq!(*example.get(&field("99")), 101112);
 
-    //     // Test values between keys
-    //     assert_eq!(*example.get(&field("0")), 0);
-    //     assert_eq!(*example.get(&field("2")), 0);
-    //     assert_eq!(*example.get(&field("6")), 0);
-    //     assert_eq!(*example.get(&field("8")), 0);
-    //     assert_eq!(*example.get(&field("98")), 0);
+        // Test values between keys
+        assert_eq!(*example.get(&field("0")), 0);
+        assert_eq!(*example.get(&field("2")), 0);
+        assert_eq!(*example.get(&field("6")), 0);
+        assert_eq!(*example.get(&field("8")), 0);
+        assert_eq!(*example.get(&field("98")), 0);
 
-    //     // Test all values systematically
-    //     for i in 0u32..100 {
-    //         let i_field = FieldElement::from(i);
-    //         if i_field != field("1")
-    //             && i_field != field("5")
-    //             && i_field != field("7")
-    //             && i_field != field("99")
-    //         {
-    //             assert_eq!(*example.get(&i_field), 0);
-    //         }
-    //     }
-    // }
+        // Test all values systematically
+        for i in 0u32..100 {
+            let i_field = FieldElement::from(i);
+            if i_field != field("1")
+                && i_field != field("5")
+                && i_field != field("7")
+                && i_field != field("99")
+            {
+                assert_eq!(*example.get(&i_field), 0);
+            }
+        }
+    }
 
-    // #[test]
-    // fn test_sparse_lookup_boundary_cases() {
-    //     // what about when keys[0] = 0 and keys[N-1] = 2^32 - 1?
-    //     let keys = [
-    //         field("0"),
-    //         field("99999"),
-    //         field("7"),
-    //         field("4294967295"), // 0xffffffff = 2^32 - 1
-    //     ];
-    //     let example = SparseArray::<i32, 4>::create(
-    //         &keys,
-    //         [123, 101112, 789, 456],
-    //         field("4294967296"), // 0x100000000 = 2^32
-    //     );
+    #[test]
+    fn test_sparse_lookup_boundary_cases() {
+        // what about when keys[0] = 0 and keys[N-1] = 2^32 - 1?
+        let keys = [
+            field("0"),
+            field("99999"),
+            field("7"),
+            field("4294967295"), // 0xffffffff = 2^32 - 1
+        ];
+        let example = SparseArray::<i32, 4>::create(
+            &keys,
+            [123, 101112, 789, 456],
+            field("4294967296"), // 0x100000000 = 2^32
+        );
 
-    //     assert_eq!(*example.get(&field("0")), 123);
-    //     assert_eq!(*example.get(&field("99999")), 101112);
-    //     assert_eq!(*example.get(&field("7")), 789);
-    //     assert_eq!(*example.get(&field("4294967295")), 456); // 0xffffffff
-    //     assert_eq!(*example.get(&field("4294967294")), 0); // 0xfffffffe
-    // }
+        assert_eq!(*example.get(&field("0")), 123);
+        assert_eq!(*example.get(&field("99999")), 101112);
+        assert_eq!(*example.get(&field("7")), 789);
+        assert_eq!(*example.get(&field("4294967295")), 456); // 0xffffffff
+        assert_eq!(*example.get(&field("4294967294")), 0); // 0xfffffffe
+    }
 
-    // #[test]
-    // #[should_panic(expected = "Maximum exceeds field modulus")]
-    // fn test_sparse_lookup_overflow() {
-    //     let keys = [field("1"), field("5"), field("7"), field("99999")];
-    //     let _example = SparseArray::<i32, 4>::create(
-    //         &keys,
-    //         [123i32, 456, 789, 101112],
-    //         FIELD_MODULUS.clone() + FieldElement::from(1u32),
-    //     );
-    // }
+    #[test]
+    #[should_panic(expected = "Maximum exceeds field modulus")]
+    fn test_sparse_lookup_overflow() {
+        let keys = [field("1"), field("5"), field("7"), field("99999")];
+        let _example = SparseArray::<i32, 4>::create(
+            &keys,
+            [123i32, 456, 789, 101112],
+            FIELD_MODULUS.clone() + FieldElement::from(1u32),
+        );
+    }
 
-    // #[test]
-    // #[should_panic(expected = "Maximum exceeds field modulus")]
-    // fn test_sparse_lookup_boundary_case_overflow() {
-    //     let keys = [
-    //         field("0"),
-    //         field("5"),
-    //         field("7"),
-    //         field("115792089237316195423570985008687907853269984665640564039457584007913129639935"),
-    //     ];
-    //     let _example = SparseArray::<i32, 4>::create(
-    //         &keys,
-    //         [123i32, 456, 789, 101112],
-    //         FIELD_MODULUS.clone() + FieldElement::from(1u32),
-    //     );
-    // }
+    #[test]
+    #[should_panic(expected = "Maximum exceeds field modulus")]
+    fn test_sparse_lookup_boundary_case_overflow() {
+        let keys = [
+            field("0"),
+            field("5"),
+            field("7"),
+            field("115792089237316195423570985008687907853269984665640564039457584007913129639935"),
+        ];
+        let _example = SparseArray::<i32, 4>::create(
+            &keys,
+            [123i32, 456, 789, 101112],
+            FIELD_MODULUS.clone() + FieldElement::from(1u32),
+        );
+    }
 
-    // #[derive(Debug, Clone, PartialEq)]
-    // struct F {
-    //     foo: [FieldElement; 3],
-    // }
+    #[derive(Debug, Clone, PartialEq)]
+    struct F {
+        foo: [FieldElement; 3],
+    }
 
-    // impl Default for F {
-    //     fn default() -> Self {
-    //         F {
-    //             foo: std::array::from_fn(|_| FieldElement::from(0u32)),
-    //         }
-    //     }
-    // }
+    impl Default for F {
+        fn default() -> Self {
+            F {
+                foo: std::array::from_fn(|_| FieldElement::from(0u32)),
+            }
+        }
+    }
 
-    // #[test]
-    // fn test_sparse_lookup_struct() {
-    //     let values = [
-    //         F {
-    //             foo: [field("1"), field("2"), field("3")],
-    //         },
-    //         F {
-    //             foo: [field("4"), field("5"), field("6")],
-    //         },
-    //         F {
-    //             foo: [field("7"), field("8"), field("9")],
-    //         },
-    //         F {
-    //             foo: [field("10"), field("11"), field("12")],
-    //         },
-    //     ];
-    //     let keys = [field("1"), field("99"), field("7"), field("5")];
-    //     let example = SparseArray::<F, 4>::create(&keys, values.clone(), field("100000"));
+    #[test]
+    fn test_sparse_lookup_struct() {
+        let values = [
+            F {
+                foo: [field("1"), field("2"), field("3")],
+            },
+            F {
+                foo: [field("4"), field("5"), field("6")],
+            },
+            F {
+                foo: [field("7"), field("8"), field("9")],
+            },
+            F {
+                foo: [field("10"), field("11"), field("12")],
+            },
+        ];
+        let keys = [field("1"), field("99"), field("7"), field("5")];
+        let example = SparseArray::<F, 4>::create(&keys, values.clone(), field("100000"));
 
-    //     assert_eq!(*example.get(&field("1")), values[0]);
-    //     assert_eq!(*example.get(&field("5")), values[3]);
-    //     assert_eq!(*example.get(&field("7")), values[2]);
-    //     assert_eq!(*example.get(&field("99")), values[1]);
+        assert_eq!(*example.get(&field("1")), values[0]);
+        assert_eq!(*example.get(&field("5")), values[3]);
+        assert_eq!(*example.get(&field("7")), values[2]);
+        assert_eq!(*example.get(&field("99")), values[1]);
 
-    //     for i in 0u32..100 {
-    //         let i_field = FieldElement::from(i);
-    //         if i_field != field("1")
-    //             && i_field != field("5")
-    //             && i_field != field("7")
-    //             && i_field != field("99")
-    //         {
-    //             assert_eq!(*example.get(&i_field), F::default());
-    //         }
-    //     }
-    // }
+        for i in 0u32..100 {
+            let i_field = FieldElement::from(i);
+            if i_field != field("1")
+                && i_field != field("5")
+                && i_field != field("7")
+                && i_field != field("99")
+            {
+                assert_eq!(*example.get(&i_field), F::default());
+            }
+        }
+    }
 
-    // #[test]
-    // fn test_sparse_array_noir_representation() {
-    //     let keys = [
-    //         field("0"),
-    //         field("99999"),
-    //         field("7"),
-    //         field("4294967295"), // 0xffffffff
-    //     ];
-    //     let example = SparseArray::<u32, 4>::create(
-    //         &keys,
-    //         [123, 101112, 789, 456],
-    //         field("4294967296"), // 0x100000000
-    //     );
+    #[test]
+    fn test_sparse_array_noir_representation() {
+        let keys = [
+            field("0"),
+            field("99999"),
+            field("7"),
+            field("4294967295"), // 0xffffffff
+        ];
+        let example = SparseArray::<u32, 4>::create(
+            &keys,
+            [123, 101112, 789, 456],
+            field("4294967296"), // 0x100000000
+        );
 
-    //     let noir_str = example.to_noir_string(None, None);
-    //     println!("\n\n===\n{}\n\n", noir_str);
-    //     let expected = "\
-    //         let example: SparseArray<4, Field> = SparseArray {\n    \
-    //         keys: [0x00000000, 0x00000000, 0x00000007, 0x0001869f, 0xffffffff, 0xffffffff],\n    \
-    //         values: [0x00000000, 0x0000007b, 0x0000007b, 0x00000315, 0x00018af8, 0x000001c8, 0x000001c8],\n    \
-    //         maximum: 0xffffffff\n\
-    //         };";
+        let noir_str = example.to_noir_string(None, None);
+        println!("\n\n===\n{}\n\n", noir_str);
+        let expected = "\
+            let table: SparseArray<4, Field> = SparseArray {\n    \
+            keys: [0x00000000, 0x00000000, 0x00000007, 0x0001869f, 0xffffffff, 0xffffffff],\n    \
+            values: [0x00000000, 0x0000007b, 0x0000007b, 0x00000315, 0x00018af8, 0x000001c8, 0x000001c8],\n    \
+            maximum: 0xffffffff\n\
+            };";
 
-    //     assert_eq!(noir_str, expected);
-    // }
+        assert_eq!(noir_str, expected);
+    }
 
     // Test cases for console output
     // #[test]
@@ -485,67 +485,70 @@ mod tests {
     //     println!("Array size 25 (randomized):\n{}", example.to_noir_string(None, None));
     // }
 
-    #[test]
-    fn print_sparse_array_50_random() {
-        let keys = [
-            field("0x3700"),
-            field("0x100"),
-            field("0x2200"),
-            field("0x4300"),
-            field("0x1800"),
-            field("0x3300"),
-            field("0x900"),
-            field("0x2800"),
-            field("0x4400"),
-            field("0x1400"),
-            field("0x2F00"),
-            field("0xE00"),
-            field("0x2500"),
-            field("0x3F00"),
-            field("0x1B00"),
-            field("0x3600"),
-            field("0xC00"),
-            field("0x2B00"),
-            field("0x4000"),
-            field("0x1700"),
-            field("0x3200"),
-            field("0x800"),
-            field("0x2100"),
-            field("0x3C00"),
-            field("0x1300"),
-            field("0x2D00"),
-            field("0x400"),
-            field("0x1900"),
-            field("0x3800"),
-            field("0xF00"),
-            field("0x2600"),
-            field("0x200"),
-            field("0x1500"),
-            field("0x3400"),
-            field("0xB00"),
-            field("0x2A00"),
-            field("0x4100"),
-            field("0x1600"),
-            field("0x3100"),
-            field("0x700"),
-            field("0x2000"),
-            field("0x3900"),
-            field("0x1200"),
-            field("0x2C00"),
-            field("0x4200"),
-            field("0x1A00"),
-            field("0x3500"),
-            field("0xD00"),
-            field("0x2700"),
-            field("0x3000"),
-        ];
-        let values = [
-            3700, 100, 2200, 4300, 1800, 3300, 900, 2800, 4400, 1400, 2900, 1300, 2500, 3900, 1900,
-            3600, 1200, 2700, 4000, 1700, 3200, 800, 2100, 3800, 1300, 2800, 400, 1900, 3700, 1500,
-            2600, 200, 1500, 3400, 1100, 2600, 4100, 1600, 3100, 700, 2000, 3900, 1200, 2700, 4200,
-            1800, 3500, 1300, 2700, 3000,
-        ];
-        let example = SparseArray::<u32, 50>::create(&keys, values, field("0x5000"));
-        println!("Array size 50 (randomized):\n{}", example.to_noir_string(None, None));
-    }
+    // #[test]
+    // fn print_sparse_array_50_random() {
+    //     let keys = [
+    //         field("0x3700"),
+    //         field("0x100"),
+    //         field("0x2200"),
+    //         field("0x4300"),
+    //         field("0x1800"),
+    //         field("0x3300"),
+    //         field("0x900"),
+    //         field("0x2800"),
+    //         field("0x4400"),
+    //         field("0x1400"),
+    //         field("0x2F00"),
+    //         field("0xE00"),
+    //         field("0x2500"),
+    //         field("0x3F00"),
+    //         field("0x1B00"),
+    //         field("0x3600"),
+    //         field("0xC00"),
+    //         field("0x2B00"),
+    //         field("0x4000"),
+    //         field("0x1700"),
+    //         field("0x3200"),
+    //         field("0x800"),
+    //         field("0x2100"),
+    //         field("0x3C00"),
+    //         field("0x1300"),
+    //         field("0x2D00"),
+    //         field("0x400"),
+    //         field("0x1900"),
+    //         field("0x3800"),
+    //         field("0xF00"),
+    //         field("0x2600"),
+    //         field("0x200"),
+    //         field("0x1500"),
+    //         field("0x3400"),
+    //         field("0xB00"),
+    //         field("0x2A00"),
+    //         field("0x4100"),
+    //         field("0x1600"),
+    //         field("0x3100"),
+    //         field("0x700"),
+    //         field("0x2000"),
+    //         field("0x3900"),
+    //         field("0x1200"),
+    //         field("0x2C00"),
+    //         field("0x4200"),
+    //         field("0x1A00"),
+    //         field("0x3500"),
+    //         field("0xD00"),
+    //         field("0x2700"),
+    //         field("0x3000"),
+    //     ];
+    //     let values = [
+    //         3700, 100, 2200, 4300, 1800, 3300, 900, 2800, 4400, 1400, 2900, 1300, 2500, 3900, 1900,
+    //         3600, 1200, 2700, 4000, 1700, 3200, 800, 2100, 3800, 1300, 2800, 400, 1900, 3700, 1500,
+    //         2600, 200, 1500, 3400, 1100, 2600, 4100, 1600, 3100, 700, 2000, 3900, 1200, 2700, 4200,
+    //         1800, 3500, 1300, 2700, 3000,
+    //     ];
+    //     let example = SparseArray::<u32, 50>::create(&keys, values, field("0x5000"));
+    //     println!(
+    //         "Array size 50 (randomized):\n{}",
+    //         example.to_noir_string(None, None)
+    //     );
+    // }
 }
