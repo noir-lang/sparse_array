@@ -1,5 +1,3 @@
-#![feature(generic_const_exprs)]
-
 use num_bigint::{BigUint, ToBigUint};
 use num_traits::Num;
 use std::default::Default;
@@ -14,60 +12,48 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Debug)]
-pub struct SortResult<const N: u32>
-where
-    [(); N as usize]: Sized,
-{
-    pub sorted: [FieldElement; N as usize],
-    pub sort_indices: [usize; N as usize],
+pub struct SortResult {
+    pub sorted: Vec<FieldElement>,
+    pub sort_indices: Vec<usize>,
 }
 
 #[derive(Debug)]
-pub struct SparseArray<T, const N: u32>
+pub struct SparseArray<T>
 where
     T: std::fmt::Debug,
-    [(); N as usize]: Sized,
-    [(); (N + 2) as usize]: Sized,
-    [(); (N + 3) as usize]: Sized,
 {
-    keys: [FieldElement; (N + 2) as usize],
-    values: [T; (N + 3) as usize],
+    keys: Vec<FieldElement>,
+    values: Vec<T>,
     maximum: FieldElement,
 }
 
-impl<T, const N: u32> SparseArray<T, N>
+impl<T> SparseArray<T>
 where
     T: Default + Clone + std::fmt::Debug,
-    [(); N as usize]: Sized,
-    [(); (N + 2) as usize]: Sized,
-    [(); (N + 3) as usize]: Sized,
 {
-    pub fn create(
-        keys: &[FieldElement; N as usize],
-        values: [T; N as usize],
-        size: FieldElement,
-    ) -> Self {
+    pub fn create(keys: &[FieldElement], values: &[T], size: FieldElement) -> Self {
+        let n = keys.len();
+        assert_eq!(n, values.len(), "Keys and values must have the same length");
+
         let maximum = size.clone() - FieldElement::from(1u32);
 
-        // Create default arrays
+        // Create vectors with capacity for n+2 keys and n+3 values
         let mut result = SparseArray {
-            keys: std::array::from_fn(|_| FieldElement::from(0u32)),
-            values: vec![T::default(); (N + 3) as usize].try_into().unwrap(),
+            keys: Vec::with_capacity(n + 2),
+            values: vec![T::default(); n + 3],
             maximum: maximum.clone(),
         };
 
         // Sort the keys
-        let sorted = sort_advanced(keys, |a, b| a < b);
+        let sorted = sort_advanced(keys);
 
         // Insert start and endpoints
-        result.keys[0] = FieldElement::from(0u32);
-        for i in 0..N as usize {
-            result.keys[i + 1] = sorted.sorted[i].clone();
-        }
-        result.keys[(N + 1) as usize] = maximum.clone();
+        result.keys.push(FieldElement::from(0u32));
+        result.keys.extend(sorted.sorted.iter().cloned());
+        result.keys.push(maximum.clone());
 
         // Populate values based on the sorted keys
-        for i in 0..N as usize {
+        for i in 0..n {
             result.values[i + 2] = values[sorted.sort_indices[i]].clone();
         }
 
@@ -82,13 +68,13 @@ where
         };
         result.values[1] = initial_value;
 
-        // Set final value (value[N+2] maps to keys[N+1] which is maximum)
-        let final_value = if keys[(N - 1) as usize] == maximum {
-            values[(N - 1) as usize].clone()
+        // Set final value (value[n+2] maps to keys[n+1] which is maximum)
+        let final_value = if keys[n - 1] == maximum {
+            values[n - 1].clone()
         } else {
             T::default()
         };
-        result.values[(N + 2) as usize] = final_value;
+        result.values[n + 2] = final_value;
 
         // Boundary checks
         assert!(
@@ -96,15 +82,12 @@ where
             "Key exceeds field modulus"
         );
         assert!(&maximum < &*FIELD_MODULUS, "Maximum exceeds field modulus");
-        assert!(
-            &maximum >= &sorted.sorted[(N - 1) as usize],
-            "Key exceeds maximum"
-        );
+        assert!(&maximum >= &sorted.sorted[n - 1], "Key exceeds maximum");
 
         result
     }
 
-    pub fn to_noir_string(&self, table_name: Option<&str>, generic_name: Option<&str>) -> String
+    pub fn to_noir_string(&self, generic_name: Option<&str>) -> String
     where
         T: ToString,
     {
@@ -122,16 +105,16 @@ where
             .collect::<Vec<_>>()
             .join(", ");
 
-        let table_name = table_name.unwrap_or("table");
         let generic_name = generic_name.unwrap_or("Field");
+        let table_length: usize = self.keys.len() - 2;
 
         format!(
-            "let {}: SparseArray<{}, {}> = SparseArray {{\n    \
+            "sparse_array::SparseArray<{}, {}> = sparse_array::SparseArray {{\n    \
              keys: [{}],\n    \
              values: [{}],\n    \
              maximum: 0x{:08x}\n\
              }};",
-            table_name, N, generic_name, keys_str, values_str, self.maximum
+            table_length, generic_name, keys_str, values_str, self.maximum
         )
     }
 
@@ -142,7 +125,7 @@ where
         }
 
         let mut left = 0;
-        let mut right = (N + 1) as usize;
+        let mut right = self.keys.len() - 1;
 
         while left + 1 < right {
             let mid = (left + right) / 2;
@@ -168,42 +151,31 @@ where
     }
 }
 
-fn sort_advanced<const N: u32>(
-    input: &[FieldElement; N as usize],
-    compare: impl Fn(&FieldElement, &FieldElement) -> bool,
-) -> SortResult<N>
-where
-    [(); N as usize]: Sized,
-{
-    let mut sorted = input.clone();
-    quicksort(&mut sorted, &compare);
+fn sort_advanced(input: &[FieldElement]) -> SortResult {
+    let mut sorted = input.to_vec();
+    quicksort(&mut sorted, &|a, b| a < b);
 
     let sort_indices = get_shuffle_indices(input, &sorted);
 
     // Verify sorting
-    for i in 0..(N as usize - 1) {
-        assert!(
-            !compare(&sorted[i + 1], &sorted[i]),
-            "Array not properly sorted"
-        );
+    for i in 0..(sorted.len() - 1) {
+        assert!(!(&sorted[i + 1] < &sorted[i]), "Array not properly sorted");
     }
 
     SortResult {
         sorted,
-        sort_indices: sort_indices.try_into().unwrap(),
+        sort_indices,
     }
 }
 
-fn get_shuffle_indices<const N: u32>(
-    lhs: &[FieldElement; N as usize],
-    rhs: &[FieldElement; N as usize],
-) -> Vec<usize> {
-    let mut shuffle_indices = vec![0usize; N as usize];
-    let mut shuffle_mask = vec![false; N as usize];
+fn get_shuffle_indices(lhs: &[FieldElement], rhs: &[FieldElement]) -> Vec<usize> {
+    let n = lhs.len();
+    let mut shuffle_indices = vec![0usize; n];
+    let mut shuffle_mask = vec![false; n];
 
-    for i in 0..N as usize {
+    for i in 0..n {
         let mut found = false;
-        for j in 0..N as usize {
+        for j in 0..n {
             if !shuffle_mask[j] && !found && lhs[i] == rhs[j] {
                 found = true;
                 shuffle_indices[i] = j;
@@ -216,6 +188,7 @@ fn get_shuffle_indices<const N: u32>(
     shuffle_indices
 }
 
+// Keeping the existing partition and quicksort functions as they already work with slices
 fn partition<T>(
     arr: &mut [T],
     low: usize,
@@ -271,9 +244,9 @@ mod tests {
 
     #[test]
     fn test_sparse_lookup() {
-        let keys = [field("1"), field("99"), field("7"), field("5")];
-        let example =
-            SparseArray::<i32, 4>::create(&keys, [123i32, 101112, 789, 456], field("100"));
+        let keys = vec![field("1"), field("99"), field("7"), field("5")];
+        let values = vec![123i32, 101112, 789, 456];
+        let example = SparseArray::create(&keys, &values, field("100"));
 
         // Test exact matches
         assert_eq!(*example.get(&field("1")), 123);
@@ -304,15 +277,16 @@ mod tests {
     #[test]
     fn test_sparse_lookup_boundary_cases() {
         // what about when keys[0] = 0 and keys[N-1] = 2^32 - 1?
-        let keys = [
+        let keys = vec![
             field("0"),
             field("99999"),
             field("7"),
             field("4294967295"), // 0xffffffff = 2^32 - 1
         ];
-        let example = SparseArray::<i32, 4>::create(
+        let values = vec![123, 101112, 789, 456];
+        let example = SparseArray::create(
             &keys,
-            [123, 101112, 789, 456],
+            &values,
             field("4294967296"), // 0x100000000 = 2^32
         );
 
@@ -326,10 +300,11 @@ mod tests {
     #[test]
     #[should_panic(expected = "Maximum exceeds field modulus")]
     fn test_sparse_lookup_overflow() {
-        let keys = [field("1"), field("5"), field("7"), field("99999")];
-        let _example = SparseArray::<i32, 4>::create(
+        let keys = vec![field("1"), field("5"), field("7"), field("99999")];
+        let values = vec![123i32, 456, 789, 101112];
+        let _example = SparseArray::create(
             &keys,
-            [123i32, 456, 789, 101112],
+            &values,
             FIELD_MODULUS.clone() + FieldElement::from(1u32),
         );
     }
@@ -337,15 +312,16 @@ mod tests {
     #[test]
     #[should_panic(expected = "Maximum exceeds field modulus")]
     fn test_sparse_lookup_boundary_case_overflow() {
-        let keys = [
+        let keys = vec![
             field("0"),
             field("5"),
             field("7"),
             field("115792089237316195423570985008687907853269984665640564039457584007913129639935"),
         ];
-        let _example = SparseArray::<i32, 4>::create(
+        let values = vec![123i32, 456, 789, 101112];
+        let _example = SparseArray::create(
             &keys,
-            [123i32, 456, 789, 101112],
+            &values,
             FIELD_MODULUS.clone() + FieldElement::from(1u32),
         );
     }
@@ -365,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_sparse_lookup_struct() {
-        let values = [
+        let values = vec![
             F {
                 foo: [field("1"), field("2"), field("3")],
             },
@@ -379,8 +355,8 @@ mod tests {
                 foo: [field("10"), field("11"), field("12")],
             },
         ];
-        let keys = [field("1"), field("99"), field("7"), field("5")];
-        let example = SparseArray::<F, 4>::create(&keys, values.clone(), field("100000"));
+        let keys = vec![field("1"), field("99"), field("7"), field("5")];
+        let example = SparseArray::create(&keys, &values, field("100000"));
 
         assert_eq!(*example.get(&field("1")), values[0]);
         assert_eq!(*example.get(&field("5")), values[3]);
@@ -401,22 +377,23 @@ mod tests {
 
     #[test]
     fn test_sparse_array_noir_representation() {
-        let keys = [
+        let keys = vec![
             field("0"),
             field("99999"),
             field("7"),
             field("4294967295"), // 0xffffffff
         ];
-        let example = SparseArray::<u32, 4>::create(
+        let values = vec![123, 101112, 789, 456];
+        let example = SparseArray::create(
             &keys,
-            [123, 101112, 789, 456],
+            &values,
             field("4294967296"), // 0x100000000
         );
 
-        let noir_str = example.to_noir_string(None, None);
+        let noir_str = example.to_noir_string(None);
         println!("\n\n===\n{}\n\n", noir_str);
         let expected = "\
-            let table: SparseArray<4, Field> = SparseArray {\n    \
+            sparse_array::SparseArray<Field, 4> = sparse_array::SparseArray {\n    \
             keys: [0x00000000, 0x00000000, 0x00000007, 0x0001869f, 0xffffffff, 0xffffffff],\n    \
             values: [0x00000000, 0x0000007b, 0x0000007b, 0x00000315, 0x00018af8, 0x000001c8, 0x000001c8],\n    \
             maximum: 0xffffffff\n\
@@ -428,7 +405,7 @@ mod tests {
     // Test cases for console output
     // #[test]
     // fn print_sparse_array_10_random() {
-    //     let keys = [
+    //     let keys = vec![
     //         field("0x33333"),
     //         field("0x1234"),
     //         field("0xFFFFF"),
@@ -440,17 +417,18 @@ mod tests {
     //         field("0x44444"),
     //         field("0x55555"),
     //     ];
-    //     let example = SparseArray::<u32, 10>::create(
-    //         &keys,
-    //         [700, 100, 1000, 200, 600, 400, 500, 300, 800, 900],
-    //         field("0x100000"),
+
+    //     let values = vec![700, 100, 1000, 200, 600, 400, 500, 300, 800, 900];
+    //     let example = SparseArray::create(&keys, &values, field("0x100000"));
+    //     println!(
+    //         "Array size 10 (randomized):\n{}",
+    //         example.to_noir_string(None)
     //     );
-    //     println!("Array size 10 (randomized):\n{}", example.to_noir_string(None, None));
     // }
 
     // #[test]
     // fn print_sparse_array_25_random() {
-    //     let keys = [
+    //     let keys = vec![
     //         field("0xE000"),
     //         field("0x1000"),
     //         field("0x50000"),
@@ -477,78 +455,127 @@ mod tests {
     //         field("0x60000"),
     //         field("0x9000"),
     //     ];
-    //     let values = [
+    //     let values = vec![
     //         7777, 222, 33333, 888, 11111, 2222, 22222, 777, 77777, 8888, 44444, 111, 3333, 55555,
     //         333, 4444, 444, 66666, 555, 5555, 666, 9999, 999, 44444, 1111,
     //     ];
-    //     let example = SparseArray::<u32, 25>::create(&keys, values, field("0x100000"));
-    //     println!("Array size 25 (randomized):\n{}", example.to_noir_string(None, None));
-    // }
-
-    // #[test]
-    // fn print_sparse_array_50_random() {
-    //     let keys = [
-    //         field("0x3700"),
-    //         field("0x100"),
-    //         field("0x2200"),
-    //         field("0x4300"),
-    //         field("0x1800"),
-    //         field("0x3300"),
-    //         field("0x900"),
-    //         field("0x2800"),
-    //         field("0x4400"),
-    //         field("0x1400"),
-    //         field("0x2F00"),
-    //         field("0xE00"),
-    //         field("0x2500"),
-    //         field("0x3F00"),
-    //         field("0x1B00"),
-    //         field("0x3600"),
-    //         field("0xC00"),
-    //         field("0x2B00"),
-    //         field("0x4000"),
-    //         field("0x1700"),
-    //         field("0x3200"),
-    //         field("0x800"),
-    //         field("0x2100"),
-    //         field("0x3C00"),
-    //         field("0x1300"),
-    //         field("0x2D00"),
-    //         field("0x400"),
-    //         field("0x1900"),
-    //         field("0x3800"),
-    //         field("0xF00"),
-    //         field("0x2600"),
-    //         field("0x200"),
-    //         field("0x1500"),
-    //         field("0x3400"),
-    //         field("0xB00"),
-    //         field("0x2A00"),
-    //         field("0x4100"),
-    //         field("0x1600"),
-    //         field("0x3100"),
-    //         field("0x700"),
-    //         field("0x2000"),
-    //         field("0x3900"),
-    //         field("0x1200"),
-    //         field("0x2C00"),
-    //         field("0x4200"),
-    //         field("0x1A00"),
-    //         field("0x3500"),
-    //         field("0xD00"),
-    //         field("0x2700"),
-    //         field("0x3000"),
-    //     ];
-    //     let values = [
-    //         3700, 100, 2200, 4300, 1800, 3300, 900, 2800, 4400, 1400, 2900, 1300, 2500, 3900, 1900,
-    //         3600, 1200, 2700, 4000, 1700, 3200, 800, 2100, 3800, 1300, 2800, 400, 1900, 3700, 1500,
-    //         2600, 200, 1500, 3400, 1100, 2600, 4100, 1600, 3100, 700, 2000, 3900, 1200, 2700, 4200,
-    //         1800, 3500, 1300, 2700, 3000,
-    //     ];
-    //     let example = SparseArray::<u32, 50>::create(&keys, values, field("0x5000"));
+    //     let example = SparseArray::create(&keys, &values, field("0x100000"));
     //     println!(
-    //         "Array size 50 (randomized):\n{}",
-    //         example.to_noir_string(None, None)
+    //         "Array size 25 (randomized):\n{}",
+    //         example.to_noir_string(None)
     //     );
     // }
+
+    #[test]
+    fn print_sparse_array_50_random() {
+        let keys = vec![
+            field("0x3700"),
+            field("0x100"),
+            field("0x2200"),
+            field("0x4300"),
+            field("0x1800"),
+            field("0x3300"),
+            field("0x900"),
+            field("0x2800"),
+            field("0x4400"),
+            field("0x1400"),
+            field("0x2F00"),
+            field("0xE00"),
+            field("0x2500"),
+            field("0x3F00"),
+            field("0x1B00"),
+            field("0x3600"),
+            field("0xC00"),
+            field("0x2B00"),
+            field("0x4000"),
+            field("0x1700"),
+            field("0x3200"),
+            field("0x800"),
+            field("0x2100"),
+            field("0x3C00"),
+            field("0x1300"),
+            field("0x2D00"),
+            field("0x400"),
+            field("0x1900"),
+            field("0x3800"),
+            field("0xF00"),
+            field("0x2600"),
+            field("0x200"),
+            field("0x1500"),
+            field("0x3400"),
+            field("0xB00"),
+            field("0x2A00"),
+            field("0x4100"),
+            field("0x1600"),
+            field("0x3100"),
+            field("0x700"),
+            field("0x2000"),
+            field("0x3900"),
+            field("0x1200"),
+            field("0x2C00"),
+            field("0x4200"),
+            field("0x1A00"),
+            field("0x3500"),
+            field("0xD00"),
+            field("0x2700"),
+            field("0x3000"),
+        ];
+        let values = vec![
+            field("3700"),
+            field("100"),
+            field("2200"),
+            field("4300"),
+            field("1800"),
+            field("3300"),
+            field("900"),
+            field("2800"),
+            field("4400"),
+            field("1400"),
+            field("2900"),
+            field("1300"),
+            field("2500"),
+            field("3900"),
+            field("1900"),
+            field("3600"),
+            field("1200"),
+            field("2700"),
+            field("4000"),
+            field("1700"),
+            field("3200"),
+            field("800"),
+            field("2100"),
+            field("3800"),
+            field("1300"),
+            field("2800"),
+            field("400"),
+            field("1900"),
+            field("3700"),
+            field("1500"),
+            field("2600"),
+            field("200"),
+            field("1500"),
+            field("3400"),
+            field("1100"),
+            field("2600"),
+            field("4100"),
+            field("1600"),
+            field("3100"),
+            field("700"),
+            field("2000"),
+            field("3900"),
+            field("1200"),
+            field("2700"),
+            field("4200"),
+            field("1800"),
+            field("3500"),
+            field("1300"),
+            field("2700"),
+            field("3000"),
+        ];
+        let example = SparseArray::create(&keys, &values, field("0x5000"));
+        println!(
+            "Array size 50 (randomized):\n{}",
+            example.to_noir_string(None)
+        );
+    }
 }
