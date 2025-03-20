@@ -1,6 +1,7 @@
 use num_bigint::{BigUint, ToBigUint};
-use num_traits::Num;
+use num_traits::{Num};
 use std::default::Default;
+use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 
 pub type FieldElement = BigUint;
@@ -9,6 +10,17 @@ lazy_static::lazy_static! {
     static ref FIELD_MODULUS: FieldElement = FieldElement::from_str(
         "21888242871839275222246405745257275088696311157297823662689037894645226208583"
     ).unwrap();
+}
+
+pub trait ToU32 {
+    fn to_u32(&self) -> u32;
+}
+
+// Implement for BigUint
+impl ToU32 for BigUint {
+    fn to_u32(&self) -> u32 {
+        self.to_u32_digits()[0]
+    }
 }
 
 #[derive(Debug)]
@@ -29,10 +41,20 @@ where
 
 impl<T> SparseArray<T>
 where
-    T: Default + Clone + std::fmt::Debug,
+    T: Default
+        + Clone
+        + std::fmt::Debug
+        + From<u32>
+        + ToU32
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + PartialEq
+        + PartialOrd,
 {
     pub fn create(keys: &[FieldElement], values: &[T], size: FieldElement) -> Self {
         let n = keys.len();
+        println!("Key length: {}", n);
         assert_eq!(n, values.len(), "Keys and values must have the same length");
 
         let maximum = size.clone() - FieldElement::from(1u32);
@@ -54,7 +76,7 @@ where
 
         // Populate values based on the sorted keys
         for i in 0..n {
-            result.values[i + 2] = values[sorted.sort_indices[i]].clone();
+            result.values[sorted.sort_indices[i] + 2] = values[i].clone();
         }
 
         // Handle initial and final values
@@ -87,6 +109,64 @@ where
         result
     }
 
+    pub fn create_packed(table: &[T], max_size: u32) -> Self {
+        let mut small_keys = Vec::new();
+        let mut small_values = Vec::new();
+        let mut keys = Vec::new();
+        let mut values = Vec::new();
+
+        // Find max value and collect non-zero entries
+        let mut max_value = T::default();
+        for i in 0..table.len() {
+            // Convert to u32 for comparison
+            if &table[i] > &max_value {
+                max_value = table[i].clone();
+            }
+
+            if table[i] != T::from(0) {
+                keys.push(FieldElement::from(i as u32));
+                values.push(table[i].clone());
+
+                if i < 256 {
+                    small_keys.push(FieldElement::from(i as u32));
+                    small_values.push(table[i].clone());
+                }
+            }
+        }
+
+        // Combine values according to the dual encoding scheme
+        for i in 0..small_keys.len() {
+            let target_value = small_values[i].clone() * T::from(256);
+
+            // Use the full max_value range exactly like the original
+            for j in 0..max_value.to_u32() {
+                let target_key =
+                    FieldElement::from(j) * FieldElement::from(256u32) + small_keys[i].clone();
+                let mut found_key = false;
+
+                for k in 0..keys.len() {
+                    if keys[k] == target_key {
+                        values[k] = values[k].clone() + target_value.clone();
+                        found_key = true;
+                        break;
+                    }
+                }
+
+                if !found_key {
+                    keys.push(target_key);
+                    values.push(target_value.clone());
+                }
+            }
+        }
+
+        // Print the number of entries for debugging
+        let num_entries = keys.len();
+        println!("Number of entries: {}", num_entries);
+
+        // Create the SparseArray using the create method
+        Self::create(&keys, &values, FieldElement::from(max_size))
+    }
+
     pub fn to_noir_string(&self, generic_name: Option<&str>) -> String
     where
         T: ToString,
@@ -109,7 +189,7 @@ where
         let table_length: usize = self.keys.len() - 2;
 
         format!(
-            "sparse_array::SparseArray<{}, {}> = sparse_array::SparseArray {{\n    \
+            "SparseArray<{}, {}> = SparseArray {{\n    \
              keys: [{}],\n    \
              values: [{}],\n    \
              maximum: 0x{:08x}\n\
