@@ -1,5 +1,5 @@
-use dep::sort::sort_advanced;
 use crate::{MutSparseArray, MutSparseArrayBase, U32RangeTraits};
+use dep::sort::sort_advanced;
 unconstrained fn __sort_field_as_u32(lhs: Field, rhs: Field) -> bool {
     lhs as u32 < rhs as u32
 }
@@ -62,7 +62,7 @@ where
     ComparisonFuncs: RangeTraits,
 {
 
-    fn create<let M: u32>(_keys: [Field; M], _values: [T; M], size: Field) -> Self {
+    pub(crate) fn create<let M: u32>(_keys: [Field; M], _values: [T; M], size: Field) -> Self {
         assert(M <= N);
         let _maximum = size - 1;
         let mut r: Self = MutSparseArrayBase {
@@ -241,7 +241,7 @@ impl<let N: u32, T> MutSparseArray<N, T>
 where
     T: std::default::Default,
 {
-    fn create<let M: u32>(_keys: [Field; M], _values: [T; M], size: Field) -> Self {
+    pub(crate) fn create<let M: u32>(_keys: [Field; M], _values: [T; M], size: Field) -> Self {
         Self { inner: MutSparseArrayBase::create(_keys, _values, size) }
     }
 
