@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/noir-lang/sparse_array/compare/v0.1.1...v0.1.2) (2025-04-17)
+
+
+### Bug Fixes
+
+* Fix visibility issues ([#16](https://github.com/noir-lang/sparse_array/issues/16)) ([5f3a49e](https://github.com/noir-lang/sparse_array/commit/5f3a49eda88203518a5d7d39227c8c5b482e88de))
+
 ## [0.1.1](https://github.com/noir-lang/sparse_array/compare/v0.1.0...v0.1.1) (2025-01-20)
 
 
