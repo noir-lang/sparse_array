@@ -59,7 +59,7 @@ where
     /**
      * @brief construct a SparseArray
      **/
-    fn create(_keys: [Field; N], _values: [T; N], size: Field) -> Self {
+    pub(crate) fn create(_keys: [Field; N], _values: [T; N], size: Field) -> Self {
         let _maximum = size - 1;
         let mut r: Self =
             SparseArray { keys: [0; N + 2], values: [T::default(); N + 3], maximum: _maximum };
@@ -167,7 +167,7 @@ where
 
 mod test {
 
-    use crate::SparseArray;
+    use super::SparseArray;
     #[test]
     fn test_sparse_lookup() {
         let example = SparseArray::create([1, 99, 7, 5], [123, 101112, 789, 456], 100);
