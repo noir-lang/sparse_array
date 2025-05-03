@@ -207,7 +207,7 @@ where
 
     fn get(self, idx: Field) -> T {
         let (found, found_index) = unsafe { self.search_for_key(idx) };
-        println(f"f {found} fi {found_index}");
+        // println(f"f {found} fi {found_index}");
         assert(found * found == found);
 
         let lhs_index = found_index;
