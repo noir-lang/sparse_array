@@ -151,8 +151,8 @@ where
         // case 2 can be modified to  `self.keys[found_index] + 1 <= idx <= self.keys[found_index + 1] - 1
         // combine the two into the following single statement:
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
-        let lhs = self.keys[found_index];
-        let rhs = self.keys[found_index + 1 - found];
+        let lhs = self.keys[found_index as u32];
+        let rhs = self.keys[(found_index + 1 - found) as u32];
         let lhs_condition = idx - lhs - 1 + found;
         let rhs_condition = rhs - 1 + found - idx;
         lhs_condition.assert_max_bit_size::<32>();
@@ -161,7 +161,7 @@ where
         // self.keys[i] maps to self.values[i+1]
         // however...if we did not find a non-sparse entry, we want to return self.values[0] (the default value)
         let value_index = (found_index + 1) * found;
-        self.values[value_index]
+        self.values[value_index as u32]
     }
 }
 

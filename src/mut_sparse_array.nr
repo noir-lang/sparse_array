@@ -169,7 +169,7 @@ where
         unsafe { self.__check_if_can_insert(found) };
 
         let lhs_index = found_index;
-        let rhs_index = self.linked_keys[found_index];
+        let rhs_index = self.linked_keys[found_index as u32];
 
         assert(found * found == found);
 
@@ -181,8 +181,8 @@ where
         // case 2 can be modified to  `self.keys[found_index] + 1 <= idx <= self.keys[found_index + 1] - 1
         // combine the two into the following single statement:
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
-        let lhs = self.keys[lhs_index];
-        let rhs = self.keys[rhs_index];
+        let lhs = self.keys[lhs_index as u32];
+        let rhs = self.keys[rhs_index as u32];
         let lhs_condition = idx - lhs - 1 + found;
         let rhs_condition = rhs - 1 + found - idx;
         ComparisonFuncs::assert_greater_than_or_equal(lhs_condition, 0);
@@ -193,15 +193,15 @@ where
         // lhs points to tail_ptr
         // tail_ptr points to rhs
         if (found == 0) {
-            self.keys[self.tail_ptr] = idx;
+            self.keys[self.tail_ptr as u32] = idx;
 
-            self.linked_keys[found_index] = self.tail_ptr * (1 - found) + found * rhs_index;
+            self.linked_keys[found_index as u32] = self.tail_ptr * (1 - found) + found * rhs_index;
 
-            self.linked_keys[self.tail_ptr] = rhs_index * (1 - found);
-            self.values[self.tail_ptr + 1] = value;
+            self.linked_keys[self.tail_ptr as u32] = rhs_index * (1 - found);
+            self.values[(self.tail_ptr + 1) as u32] = value;
             self.tail_ptr += 1;
         } else {
-            self.values[found_index + 1] = value;
+            self.values[(found_index + 1) as u32] = value;
         }
     }
 
@@ -211,7 +211,7 @@ where
         assert(found * found == found);
 
         let lhs_index = found_index;
-        let rhs_index = self.linked_keys[found_index];
+        let rhs_index = self.linked_keys[found_index as u32];
 
         assert(found * found == found);
 
@@ -223,8 +223,8 @@ where
         // case 2 can be modified to  `self.keys[found_index] + 1 <= idx <= self.keys[found_index + 1] - 1
         // combine the two into the following single statement:
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
-        let lhs = self.keys[lhs_index];
-        let rhs = self.keys[rhs_index];
+        let lhs = self.keys[lhs_index as u32];
+        let rhs = self.keys[rhs_index as u32];
         let lhs_condition = idx - lhs - 1 + found;
         let rhs_condition = rhs - 1 + found - idx;
         ComparisonFuncs::assert_greater_than_or_equal(lhs_condition, 0);
@@ -233,7 +233,7 @@ where
         // lhs_condition.assert_max_bit_size::<32>();
         // rhs_condition.assert_max_bit_size::<32>();
         let value_index = (lhs_index + 1) * found;
-        self.values[value_index]
+        self.values[value_index as u32]
     }
 }
 
