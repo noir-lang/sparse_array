@@ -123,7 +123,7 @@ where
         r
     }
 
-    unconstrained fn search_for_key(self, target: u32) -> (u32, u32) {
+    unconstrained fn search_for_key(self, target: u32) -> (bool, u32) {
         let mut found = false;
         let mut found_index = 0;
         let mut previous_less_than_or_equal_to_target = false;
@@ -146,19 +146,18 @@ where
             //    }
         }
 
-        (found as u32, found_index)
+        (found, found_index)
     }
 
-    unconstrained fn __check_if_can_insert(self, found: u32) {
+    unconstrained fn __check_if_can_insert(self, found: bool) {
         assert(
-            (found == 1) | (self.tail_ptr < N + 2),
+            (found == true) | (self.tail_ptr < N + 2),
             "MutSparseArray::set exceeded maximum size of array",
         );
     }
 
     fn set(&mut self, idx: u32, value: T) {
         let (found, found_index) = unsafe { self.search_for_key(idx) };
-        assert(found * found == found);
 
         // check can be unsafe because, if check fails, unsatisfiable constraints are created
         // due to an array overflow when accesing `self.linked_keys[self.tail_ptr]`
@@ -166,8 +165,6 @@ where
 
         let lhs_index = found_index;
         let rhs_index = self.linked_keys[found_index];
-
-        assert(found * found == found);
 
         // OK! So we have the following cases to check
         // 1. if `found` then `self.keys[found_index] == idx`
@@ -180,17 +177,17 @@ where
         let lhs = self.keys[lhs_index];
         let rhs = self.keys[rhs_index];
 
-        assert(lhs + 1 - found <= idx);
-        assert(idx <= rhs + found - 1);
+        assert(lhs + 1 - found as u32 <= idx);
+        assert(idx <= rhs + found as u32 - 1);
 
         // lhs points to tail_ptr
         // tail_ptr points to rhs
-        if (found == 0) {
+        if (found == false) {
             self.keys[self.tail_ptr] = idx;
 
-            self.linked_keys[found_index] = self.tail_ptr * (1 - found) + found * rhs_index;
+            self.linked_keys[found_index] = self.tail_ptr;
 
-            self.linked_keys[self.tail_ptr] = rhs_index * (1 - found);
+            self.linked_keys[self.tail_ptr] = rhs_index;
             self.values[self.tail_ptr + 1] = value;
             self.tail_ptr += 1;
         } else {
@@ -200,12 +197,9 @@ where
 
     fn get(self, idx: u32) -> T {
         let (found, found_index) = unsafe { self.search_for_key(idx) };
-        assert(found * found == found);
 
         let lhs_index = found_index;
         let rhs_index = self.linked_keys[found_index];
-
-        assert(found * found == found);
 
         // OK! So we have the following cases to check
         // 1. if `found` then `self.keys[found_index] == idx`
@@ -217,9 +211,9 @@ where
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
         let lhs = self.keys[lhs_index];
         let rhs = self.keys[rhs_index];
-        assert(lhs + 1 - found <= idx);
-        assert(idx <= rhs + found - 1);
-        let value_index = (lhs_index + 1) * found;
+        assert(lhs + 1 - found as u32 <= idx);
+        assert(idx <= rhs + found as u32 - 1);
+        let value_index = (lhs_index + 1) * found as u32;
         self.values[value_index]
     }
 }

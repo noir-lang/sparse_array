@@ -111,7 +111,7 @@ where
      * @brief determine whether `target` is present in `self.keys`
      * @details if `found == false`, `self.keys[found_index] < target < self.keys[found_index + 1]`
      **/
-    unconstrained fn search_for_key(self, target: u32) -> (u32, u32) {
+    unconstrained fn search_for_key(self, target: u32) -> (bool, u32) {
         let mut found = false;
         let mut found_index: u32 = 0;
         let mut previous_less_than_or_equal_to_target = false;
@@ -129,7 +129,7 @@ where
             }
             previous_less_than_or_equal_to_target = current_less_than_or_equal_to_target;
         }
-        (found as u32, found_index)
+        (found, found_index)
     }
 
     /**
@@ -138,8 +138,6 @@ where
      **/
     fn get(self, idx: u32) -> T {
         let (found, found_index) = unsafe { self.search_for_key(idx) };
-        // bool check. 0.25 gates cheaper than a raw `bool` type. need to fix at some point
-        assert(found * found == found);
 
         // OK! So we have the following cases to check
         // 1. if `found` then `self.keys[found_index] == idx`
@@ -150,13 +148,13 @@ where
         // combine the two into the following single statement:
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
         let lhs = self.keys[found_index];
-        let rhs = self.keys[found_index + 1 - found];
-        assert(lhs + 1 - found <= idx);
-        assert(idx <= rhs + found - 1);
+        let rhs = self.keys[found_index + 1 - found as u32];
+        assert(lhs + 1 - found as u32 <= idx);
+        assert(idx <= rhs + found as u32 - 1);
 
         // self.keys[i] maps to self.values[i+1]
         // however...if we did not find a non-sparse entry, we want to return self.values[0] (the default value)
-        let value_index = (found_index + 1) * found;
+        let value_index = (found_index + 1) * found as u32;
         self.values[value_index]
     }
 }
