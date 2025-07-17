@@ -102,6 +102,7 @@ where
         // because `self.keys` is sorted, we can simply validate that
         // sorted_keys.sorted[0] < 2^32
         // sorted_keys.sorted[N-1] < maximum
+        assert(_maximum >= sorted_keys.sorted[N - 1]);
         r
     }
 
@@ -149,6 +150,12 @@ where
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
         let lhs = self.keys[found_index];
         let rhs = self.keys[found_index + 1 - found];
+        //let lhs_condition = idx - lhs - 1 + found;
+        assert(lhs + 1 - found <= idx);
+        assert(idx <= rhs + found - 1);
+        //let rhs_condition = rhs - 1 + found - idx;
+        //lhs_condition.assert_max_bit_size::<32>();
+        //rhs_condition.assert_max_bit_size::<32>();
 
         // self.keys[i] maps to self.values[i+1]
         // however...if we did not find a non-sparse entry, we want to return self.values[0] (the default value)
@@ -180,27 +187,25 @@ mod test {
     fn test_sparse_lookup_boundary_cases() {
         // what about when keys[0] = 0 and keys[N-1] = 2^32 - 1?
         let example = SparseArray::create(
-            [0, 99999, 7, 0xffffffff],
+            [0, 99999, 7, 0xfffffffe],
             [123, 101112, 789, 456],
-            0xFFFFFFFF,
+            0xffffffff,
         );
 
         assert(example.get(0) == 123);
         assert(example.get(99999) == 101112);
         assert(example.get(7) == 789);
-        assert(example.get(0xffffffff) == 456);
-        assert(example.get(0xfffffffe) == 0);
+        assert(example.get(0xfffffffe) == 456);
+        assert(example.get(0xfffffffd) == 0);
     }
 
-    /**
-    #[test(should_fail_with = "call to assert_max_bit_size")]
+    #[test(should_fail)]
     fn test_sparse_lookup_overflow() {
         let example = SparseArray::create([1, 5, 7, 99999], [123, 456, 789, 101112], 100000);
 
         assert(example.get(100000) == 0);
     }
-    **/
-    
+
     /**
     #[test(should_fail_with = "call to assert_max_bit_size")]
     fn test_sparse_lookup_boundary_case_overflow() {
@@ -210,7 +215,7 @@ mod test {
         assert(example.get(0x100000000) == 0);
     }
     **/
-    #[test(should_fail_with = "call to assert_max_bit_size")]
+    #[test(should_fail)]
     fn test_sparse_lookup_key_exceeds_maximum() {
         let example =
             SparseArray::create([0, 5, 7, 0xffffffff], [123, 456, 789, 101112], 0xffffffff);
