@@ -63,6 +63,7 @@ where
 
     pub(crate) fn create<let M: u32>(_keys: [u32; M], _values: [T; M], size: u32) -> Self {
         assert(M <= N);
+        assert(size >= 1);
         let _maximum: u32 = size - 1;
         let mut r: Self = MutSparseArrayBase {
             keys: [0; N + 2],
@@ -117,8 +118,6 @@ where
         // because `self.keys` is sorted, we can simply validate that
         // sorted_keys.sorted[0] < 2^32
         // sorted_keys.sorted[N-1] < maximum
-
-        let val = sorted_keys.sorted[M - 1];
         assert(_maximum >= sorted_keys.sorted[M - 1]);
         r.tail_ptr = M + 2;
         r
@@ -218,13 +217,8 @@ where
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
         let lhs = self.keys[lhs_index];
         let rhs = self.keys[rhs_index];
-        let lhs_condition = idx + found - lhs - 1;
-        let rhs_condition = rhs + found - 1 - idx;
-        //ComparisonFuncs::assert_greater_than_or_equal(lhs_condition, 0);
-        //ComparisonFuncs::assert_greater_than_or_equal(rhs_condition, 0);
-
-        // lhs_condition.assert_max_bit_size::<32>();
-        // rhs_condition.assert_max_bit_size::<32>();
+        assert(lhs + 1 - found <= idx);
+        assert(idx <= rhs + found - 1);
         let value_index = (lhs_index + 1) * found;
         self.values[value_index]
     }

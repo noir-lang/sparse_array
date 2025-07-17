@@ -48,7 +48,7 @@ pub struct MutSparseArray<let N: u32, T> {
 pub struct SparseArray<let N: u32, T> {
     keys: [u32; N + 2],
     values: [T; N + 3],
-    maximum: u32, // can be up to 2^32
+    maximum: u32, // can be up to 2^32 - 1
 }
 impl<let N: u32, T> SparseArray<N, T>
 where
@@ -59,6 +59,7 @@ where
      * @brief construct a SparseArray
      **/
     pub(crate) fn create(_keys: [u32; N], _values: [T; N], size: u32) -> Self {
+        assert(size >= 1);
         let _maximum = size - 1;
         let mut r: Self =
             SparseArray { keys: [0; N + 2], values: [T::default(); N + 3], maximum: _maximum };
@@ -150,12 +151,8 @@ where
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
         let lhs = self.keys[found_index];
         let rhs = self.keys[found_index + 1 - found];
-        //let lhs_condition = idx - lhs - 1 + found;
         assert(lhs + 1 - found <= idx);
         assert(idx <= rhs + found - 1);
-        //let rhs_condition = rhs - 1 + found - idx;
-        //lhs_condition.assert_max_bit_size::<32>();
-        //rhs_condition.assert_max_bit_size::<32>();
 
         // self.keys[i] maps to self.values[i+1]
         // however...if we did not find a non-sparse entry, we want to return self.values[0] (the default value)
