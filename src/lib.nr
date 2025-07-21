@@ -1,7 +1,7 @@
 mod mut_sparse_array;
 use dep::sort::sort_advanced;
 
-unconstrained fn __sort_field_as_u32(lhs: u32, rhs: u32) -> bool {
+unconstrained fn __sort(lhs: u32, rhs: u32) -> bool {
     //  lhs.lt(rhs)
     lhs < rhs
 }
@@ -67,7 +67,7 @@ where
         // for any valid index, we want to ensure the following is satified:
         // self.keys[X] <= index <= self.keys[X+1]
         // this requires us to sort hte keys, and insert a startpoint and endpoint
-        let sorted_keys = sort_advanced(_keys, __sort_field_as_u32, assert_sorted);
+        let sorted_keys = sort_advanced(_keys, __sort, assert_sorted);
 
         // insert start and endpoints
         r.keys[0] = 0;
