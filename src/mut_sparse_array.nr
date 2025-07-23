@@ -1,12 +1,11 @@
 use crate::{MutSparseArray, MutSparseArrayBase, U32RangeTraits};
 use dep::sort::sort_advanced;
-unconstrained fn __sort_field_as_u32(lhs: Field, rhs: Field) -> bool {
-    lhs as u32 < rhs as u32
+unconstrained fn __sort(lhs: u32, rhs: u32) -> bool {
+    lhs < rhs
 }
 
-fn assert_sorted(lhs: Field, rhs: Field) {
-    let result = (rhs - lhs - 1);
-    result.assert_max_bit_size::<32>();
+fn assert_sorted(lhs: u32, rhs: u32) {
+    assert(lhs < rhs);
 }
 
 trait RangeTraits {
@@ -62,9 +61,10 @@ where
     ComparisonFuncs: RangeTraits,
 {
 
-    pub(crate) fn create<let M: u32>(_keys: [Field; M], _values: [T; M], size: Field) -> Self {
+    pub(crate) fn create<let M: u32>(_keys: [u32; M], _values: [T; M], size: u32) -> Self {
         assert(M <= N);
-        let _maximum = size - 1;
+        assert(size >= 1);
+        let _maximum: u32 = size - 1;
         let mut r: Self = MutSparseArrayBase {
             keys: [0; N + 2],
             values: [T::default(); N + 3],
@@ -76,7 +76,7 @@ where
         // for any valid index, we want to ensure the following is satified:
         // self.keys[X] <= index <= self.keys[X+1]
         // this requires us to sort hte keys, and insert a startpoint and endpoint
-        let sorted_keys = sort_advanced(_keys, __sort_field_as_u32, assert_sorted);
+        let sorted_keys = sort_advanced(_keys, __sort, assert_sorted);
 
         // insert start and endpoints
         r.keys[0] = 0;
@@ -86,9 +86,10 @@ where
         r.keys[M + 1] = _maximum;
 
         for i in 0..M + 2 {
-            r.linked_keys[i] = i as Field + 1;
+            r.linked_keys[i] = i + 1;
         }
-        r.linked_keys[M + 1] = -1;
+        // set the last linked key to 2^32 - 1
+        r.linked_keys[M + 1] = 0xFFFFFFFF;
 
         // populate values based on the sorted keys
         // note: self.keys[i] maps to self.values[i+1]
@@ -117,17 +118,12 @@ where
         // because `self.keys` is sorted, we can simply validate that
         // sorted_keys.sorted[0] < 2^32
         // sorted_keys.sorted[N-1] < maximum
-        ComparisonFuncs::assert_greater_than_or_equal(sorted_keys.sorted[0], 0);
-        ComparisonFuncs::assert_greater_than_or_equal(_maximum, 0);
-        ComparisonFuncs::assert_greater_than_or_equal(_maximum, sorted_keys.sorted[M - 1]);
-
-        // _maximum.assert_max_bit_size::<32>();
-        // (_maximum - sorted_keys.sorted[M - 1]).assert_max_bit_size::<32>();
-        r.tail_ptr = M as Field + 2;
+        assert(_maximum >= sorted_keys.sorted[M - 1]);
+        r.tail_ptr = M + 2;
         r
     }
 
-    unconstrained fn search_for_key(self, target: Field) -> (Field, Field) {
+    unconstrained fn search_for_key(self, target: u32) -> (bool, u32) {
         let mut found = false;
         let mut found_index = 0;
         let mut previous_less_than_or_equal_to_target = false;
@@ -137,11 +133,11 @@ where
             let current_less_than_or_equal_to_target = self.keys[iterator] as u64 <= target as u64;
             if (self.keys[iterator] == target) {
                 found = true;
-                found_index = iterator as Field;
+                found_index = iterator;
                 break;
             }
             if (previous_less_than_or_equal_to_target & !current_less_than_or_equal_to_target) {
-                found_index = prev as Field;
+                found_index = prev;
                 break;
             }
             previous_less_than_or_equal_to_target = current_less_than_or_equal_to_target;
@@ -150,19 +146,18 @@ where
             //    }
         }
 
-        (found as Field, found_index)
+        (found, found_index)
     }
 
-    unconstrained fn __check_if_can_insert(self, found: Field) {
+    unconstrained fn __check_if_can_insert(self, found: bool) {
         assert(
-            (found == 1) | (self.tail_ptr as u32 < N + 2),
+            (found == true) | (self.tail_ptr < N + 2),
             "MutSparseArray::set exceeded maximum size of array",
         );
     }
 
-    fn set(&mut self, idx: Field, value: T) {
+    fn set(&mut self, idx: u32, value: T) {
         let (found, found_index) = unsafe { self.search_for_key(idx) };
-        assert(found * found == found);
 
         // check can be unsafe because, if check fails, unsatisfiable constraints are created
         // due to an array overflow when accesing `self.linked_keys[self.tail_ptr]`
@@ -171,8 +166,6 @@ where
         let lhs_index = found_index;
         let rhs_index = self.linked_keys[found_index];
 
-        assert(found * found == found);
-
         // OK! So we have the following cases to check
         // 1. if `found` then `self.keys[found_index] == idx`
         // 2. if `!found` then `self.keys[found_index] < idx < self.keys[found_index + 1]
@@ -183,21 +176,18 @@ where
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
         let lhs = self.keys[lhs_index];
         let rhs = self.keys[rhs_index];
-        let lhs_condition = idx - lhs - 1 + found;
-        let rhs_condition = rhs - 1 + found - idx;
-        ComparisonFuncs::assert_greater_than_or_equal(lhs_condition, 0);
-        ComparisonFuncs::assert_greater_than_or_equal(rhs_condition, 0);
 
-        // lhs_condition.assert_max_bit_size::<32>();
-        // rhs_condition.assert_max_bit_size::<32>();
+        assert(lhs + 1 - found as u32 <= idx);
+        assert(idx <= rhs + found as u32 - 1);
+
         // lhs points to tail_ptr
         // tail_ptr points to rhs
-        if (found == 0) {
+        if (found == false) {
             self.keys[self.tail_ptr] = idx;
 
-            self.linked_keys[found_index] = self.tail_ptr * (1 - found) + found * rhs_index;
+            self.linked_keys[found_index] = self.tail_ptr;
 
-            self.linked_keys[self.tail_ptr] = rhs_index * (1 - found);
+            self.linked_keys[self.tail_ptr] = rhs_index;
             self.values[self.tail_ptr + 1] = value;
             self.tail_ptr += 1;
         } else {
@@ -205,15 +195,11 @@ where
         }
     }
 
-    fn get(self, idx: Field) -> T {
+    fn get(self, idx: u32) -> T {
         let (found, found_index) = unsafe { self.search_for_key(idx) };
-        println(f"f {found} fi {found_index}");
-        assert(found * found == found);
 
         let lhs_index = found_index;
         let rhs_index = self.linked_keys[found_index];
-
-        assert(found * found == found);
 
         // OK! So we have the following cases to check
         // 1. if `found` then `self.keys[found_index] == idx`
@@ -225,14 +211,9 @@ where
         // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
         let lhs = self.keys[lhs_index];
         let rhs = self.keys[rhs_index];
-        let lhs_condition = idx - lhs - 1 + found;
-        let rhs_condition = rhs - 1 + found - idx;
-        ComparisonFuncs::assert_greater_than_or_equal(lhs_condition, 0);
-        ComparisonFuncs::assert_greater_than_or_equal(rhs_condition, 0);
-
-        // lhs_condition.assert_max_bit_size::<32>();
-        // rhs_condition.assert_max_bit_size::<32>();
-        let value_index = (lhs_index + 1) * found;
+        assert(lhs + 1 - found as u32 <= idx);
+        assert(idx <= rhs + found as u32 - 1);
+        let value_index = (lhs_index + 1) * found as u32;
         self.values[value_index]
     }
 }
@@ -241,19 +222,19 @@ impl<let N: u32, T> MutSparseArray<N, T>
 where
     T: std::default::Default,
 {
-    pub(crate) fn create<let M: u32>(_keys: [Field; M], _values: [T; M], size: Field) -> Self {
-        Self { inner: MutSparseArrayBase::create(_keys, _values, size) }
+    pub(crate) fn create<let M: u32>(keys: [u32; M], values: [T; M], size: u32) -> Self {
+        Self { inner: MutSparseArrayBase::create(keys, values, size) }
     }
 
-    fn get(self, idx: Field) -> T {
+    fn get(self, idx: u32) -> T {
         self.inner.get(idx)
     }
 
-    fn set(&mut self, idx: Field, value: T) {
+    fn set(&mut self, idx: u32, value: T) {
         self.inner.set(idx, value);
     }
 
-    fn length(self) -> Field {
+    fn length(self) -> u32 {
         self.inner.maximum + 1
     }
 }
@@ -276,7 +257,7 @@ mod test {
         assert(example.get(55) == 333);
         for i in 0..100 {
             if ((i != 1) & (i != 5) & (i != 7) & (i != 55) & (i != 99)) {
-                assert(example.get(i as Field) == 0);
+                assert(example.get(i) == 0);
             }
         }
     }
@@ -284,16 +265,16 @@ mod test {
     fn test_sparse_lookup_boundary_cases() {
         // what about when keys[0] = 0 and keys[N-1] = 2^32 - 1?
         let example: MutSparseArray<6, _> = MutSparseArray::create(
-            [0, 99999, 7, 0xffffffff],
+            [0, 99999, 7, 0xfffffffe],
             [123, 101112, 789, 456],
-            0x100000000,
+            0xFFFFFFFF,
         );
 
         assert(example.get(0) == 123);
         assert(example.get(99999) == 101112);
         assert(example.get(7) == 789);
-        assert(example.get(0xffffffff) == 456);
-        assert(example.get(0xfffffffe) == 0);
+        assert(example.get(0xfffffffe) == 456);
+        assert(example.get(0xfffffffd) == 0);
     }
 
     #[test]
@@ -313,7 +294,7 @@ mod test {
         assert(example.get(100000) == 0);
     }
 
-    #[test(should_fail_with = "call to assert_max_bit_size")]
+    #[test(should_fail)]
     fn test_sparse_lookup_overflow() {
         let example: MutSparseArray<8, _> =
             MutSparseArray::create([1, 5, 7, 99999], [123, 456, 789, 101112], 100000);
@@ -321,15 +302,15 @@ mod test {
         assert(example.get(100000) == 0);
     }
 
-    #[test(should_fail_with = "call to assert_max_bit_size")]
+    #[test(should_fail)]
     fn test_sparse_lookup_boundary_case_overflow() {
         let example: MutSparseArray<4, _> =
-            MutSparseArray::create([0, 5, 7, 0xffffffff], [123, 456, 789, 101112], 0x100000000);
+            MutSparseArray::create([0, 5, 7, 0xffffffff], [123, 456, 789, 101112], 0xFFFFFFFF);
 
-        assert(example.get(0x100000000) == 0);
+        assert(example.get(0xFFFFFFFF) == 0);
     }
 
-    #[test(should_fail_with = "call to assert_max_bit_size")]
+    #[test(should_fail)]
     fn test_sparse_lookup_key_exceeds_maximum() {
         let example: MutSparseArray<6, _> =
             MutSparseArray::create([0, 5, 7, 0xffffffff], [123, 456, 789, 101112], 0xffffffff);
@@ -350,7 +331,7 @@ mod test {
 
         for i in 0..100 {
             if ((i != 1) & (i != 5) & (i != 7) & (i != 99)) {
-                assert(example.get(i as Field) == 0);
+                assert(example.get(i) == 0);
             }
         }
     }
@@ -386,7 +367,7 @@ mod test {
         assert(example.get(99) == values[1]);
         for i in 0..100 {
             if ((i != 1) & (i != 5) & (i != 7) & (i != 99)) {
-                assert(example.get(i as Field) == F::default());
+                assert(example.get(i) == F::default());
             }
         }
     }
