@@ -1,5 +1,5 @@
 mod mut_sparse_array;
-use dep::sort::sort_advanced;
+use ::sort::sort_advanced;
 
 unconstrained fn __sort(lhs: u32, rhs: u32) -> bool {
     //  lhs.lt(rhs)
