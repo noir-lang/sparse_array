@@ -80,8 +80,10 @@ where
         // note: self.keys[i] maps to self.values[i+1]
         // self.values[0] does not map to any key. we use it to store the default empty value,
         // which is returned when `get(idx)` is called and `idx` does not exist in `self.keys`
+        // sort_indices[i] is the sorted position of input key i, so write each
+        // input value to its key's sorted slot
         for i in 0..N {
-            r.values[i + 2] = _values[sorted_keys.sort_indices[i]];
+            r.values[sorted_keys.sort_indices[i] + 2] = _values[i];
         }
         // insert values that map to our key start and endpoints
         // if _keys[0] = 0 then values[0] must equal _values[0], so some conditional logic is required
@@ -216,6 +218,20 @@ mod test {
             SparseArray::create([0, 5, 7, 0xffffffff], [123, 456, 789, 101112], 0xffffffff);
         assert(example.maximum == 0xffffffff);
     }
+
+    // Regression test for https://github.com/noir-lang/noir-library-claude/issues/6
+    // The keys [3, 1, 2] sort via a 3-cycle permutation, so `sort_indices` differs
+    // from its inverse. `create` must use the inverse map when populating values,
+    // otherwise `get(key)` returns a different key's value.
+    #[test]
+    fn test_sparse_lookup_non_involution_key_order() {
+        let example = SparseArray::create([3, 1, 2], [30, 10, 20], 100);
+
+        assert(example.get(1) == 10);
+        assert(example.get(2) == 20);
+        assert(example.get(3) == 30);
+    }
+
     #[test]
     fn test_sparse_lookup_u32() {
         let example = SparseArray::create(
