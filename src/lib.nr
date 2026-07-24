@@ -11,6 +11,60 @@ fn assert_sorted(lhs: u32, rhs: u32) {
 }
 
 /**
+ * @brief shared constructor logic for SparseArray and MutSparseArrayBase:
+ *        sort `input_keys`, write them into `keys[1..M+1]` with 0 and `maximum`
+ *        as start/endpoints, and place each input value at its key's sorted slot
+ *        (keys[i] maps to values[i+1]; values[0] stays the default empty value)
+ **/
+fn insert_sorted_keys_and_values<T, let M: u32, let K: u32, let V: u32>(
+    input_keys: [u32; M],
+    input_values: [T; M],
+    maximum: u32,
+    keys: &mut [u32; K],
+    values: &mut [T; V],
+)
+where
+    T: std::default::Default,
+{
+    // for any valid index, we want to ensure the following is satified:
+    // keys[X] <= index <= keys[X+1]
+    // this requires us to sort the keys, and insert a startpoint and endpoint
+    let sorted_keys = sort_advanced(input_keys, __sort, assert_sorted);
+
+    // insert start and endpoints
+    keys[0] = 0;
+    for i in 0..M {
+        keys[i + 1] = sorted_keys.sorted[i];
+    }
+    keys[M + 1] = maximum;
+
+    // sort_indices[i] is the sorted position of input key i, so write each
+    // input value to its key's sorted slot
+    for i in 0..M {
+        values[sorted_keys.sort_indices[i] + 2] = input_values[i];
+    }
+
+    // insert values that map to our key start and endpoints
+    // if input_keys[0] = 0 then values[1] must equal input_values[0], so some
+    // conditional logic is required (same for input_keys[M-1])
+    let mut initial_value = T::default();
+    if (input_keys[0] == 0) {
+        initial_value = input_values[0];
+    }
+    let mut final_value = T::default();
+    if (input_keys[M - 1] == maximum) {
+        final_value = input_values[M - 1];
+    }
+    values[1] = initial_value;
+    values[M + 2] = final_value;
+
+    // perform boundary checks!
+    // because the keys are sorted, checking the largest key does not exceed
+    // `maximum` validates every key
+    assert(maximum >= sorted_keys.sorted[M - 1]);
+}
+
+/**
  * @brief MutSparseArray, a sparse array of configurable size with `N` nonzero entries.
  *        Can be read from and written into
  *
@@ -64,48 +118,7 @@ where
         let mut r: Self =
             SparseArray { keys: [0; N + 2], values: [T::default(); N + 3], maximum: _maximum };
 
-        // for any valid index, we want to ensure the following is satified:
-        // self.keys[X] <= index <= self.keys[X+1]
-        // this requires us to sort hte keys, and insert a startpoint and endpoint
-        let sorted_keys = sort_advanced(_keys, __sort, assert_sorted);
-
-        // insert start and endpoints
-        r.keys[0] = 0;
-        for i in 0..N {
-            r.keys[i + 1] = sorted_keys.sorted[i];
-        }
-        r.keys[N + 1] = _maximum;
-
-        // populate values based on the sorted keys
-        // note: self.keys[i] maps to self.values[i+1]
-        // self.values[0] does not map to any key. we use it to store the default empty value,
-        // which is returned when `get(idx)` is called and `idx` does not exist in `self.keys`
-        // sort_indices[i] is the sorted position of input key i, so write each
-        // input value to its key's sorted slot
-        for i in 0..N {
-            r.values[sorted_keys.sort_indices[i] + 2] = _values[i];
-        }
-        // insert values that map to our key start and endpoints
-        // if _keys[0] = 0 then values[0] must equal _values[0], so some conditional logic is required
-        // (same for _keys[N-1])
-        let mut initial_value = T::default();
-        if (_keys[0] == 0) {
-            initial_value = _values[0];
-        }
-        let mut final_value = T::default();
-        if (_keys[N - 1] == _maximum) {
-            final_value = _values[N - 1];
-        }
-        r.values[1] = initial_value;
-        r.values[N + 2] = final_value;
-
-        // perform boundary checks!
-        // the maximum size of the sparse array is 2^32
-        // we need to check that every element in `self.keys` is less than 2^32
-        // because `self.keys` is sorted, we can simply validate that
-        // sorted_keys.sorted[0] < 2^32
-        // sorted_keys.sorted[N-1] < maximum
-        assert(_maximum >= sorted_keys.sorted[N - 1]);
+        insert_sorted_keys_and_values(_keys, _values, _maximum, &mut r.keys, &mut r.values);
         r
     }
 

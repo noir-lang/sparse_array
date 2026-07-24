@@ -1,12 +1,4 @@
-use crate::{MutSparseArray, MutSparseArrayBase, U32RangeTraits};
-use ::sort::sort_advanced;
-unconstrained fn __sort(lhs: u32, rhs: u32) -> bool {
-    lhs < rhs
-}
-
-fn assert_sorted(lhs: u32, rhs: u32) {
-    assert(lhs < rhs);
-}
+use crate::{insert_sorted_keys_and_values, MutSparseArray, MutSparseArrayBase, U32RangeTraits};
 
 trait RangeTraits {
     fn less_than(lhs: Field, rhs: Field) -> bool;
@@ -73,17 +65,7 @@ where
             tail_ptr: 0,
         };
 
-        // for any valid index, we want to ensure the following is satified:
-        // self.keys[X] <= index <= self.keys[X+1]
-        // this requires us to sort hte keys, and insert a startpoint and endpoint
-        let sorted_keys = sort_advanced(_keys, __sort, assert_sorted);
-
-        // insert start and endpoints
-        r.keys[0] = 0;
-        for i in 0..M {
-            r.keys[i + 1] = sorted_keys.sorted[i];
-        }
-        r.keys[M + 1] = _maximum;
+        insert_sorted_keys_and_values(_keys, _values, _maximum, &mut r.keys, &mut r.values);
 
         for i in 0..M + 2 {
             r.linked_keys[i] = i + 1;
@@ -91,36 +73,6 @@ where
         // set the last linked key to 2^32 - 1
         r.linked_keys[M + 1] = 0xFFFFFFFF;
 
-        // populate values based on the sorted keys
-        // note: self.keys[i] maps to self.values[i+1]
-        // self.values[0] does not map to any key. we use it to store the default empty value,
-        // which is returned when `get(idx)` is called and `idx` does not exist in `self.keys`
-        // sort_indices[i] is the sorted position of input key i, so write each
-        // input value to its key's sorted slot
-        for i in 0..M {
-            r.values[sorted_keys.sort_indices[i] + 2] = _values[i];
-        }
-        // insert values that map to our key start and endpoints
-        // if _keys[0] = 0 then values[0] must equal _values[0], so some conditional logic is required
-        // (same for _keys[N-1])
-        let mut initial_value = T::default();
-        if (_keys[0] == 0) {
-            initial_value = _values[0];
-        }
-        let mut final_value = T::default();
-        if (_keys[M - 1] == _maximum) {
-            final_value = _values[M - 1];
-        }
-        r.values[1] = initial_value;
-        r.values[M + 2] = final_value;
-
-        // perform boundary checks!
-        // the maximum size of the sparse array is 2^32
-        // we need to check that every element in `self.keys` is less than 2^32
-        // because `self.keys` is sorted, we can simply validate that
-        // sorted_keys.sorted[0] < 2^32
-        // sorted_keys.sorted[N-1] < maximum
-        assert(_maximum >= sorted_keys.sorted[M - 1]);
         r.tail_ptr = M + 2;
         r
     }
