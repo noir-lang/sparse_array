@@ -1,5 +1,10 @@
 # sparse_array
 
+> [!WARNING]
+> **This library is experimental software. It has not been fully audited and is not guaranteed to be secure. Expect bugs!**
+>
+> sparse_array is provided "as is", without warranty of any kind (see [LICENSE](LICENSE)). Bugs in this library can lead to under-constrained circuits, allowing invalid proofs to be accepted. Do not rely on it to protect real assets or sensitive data without your own independent review.
+
 Noir library that implements efficient sparse arrays, both constant (SparseArray) and mutable (MutSparseArray)
 
 ## Noir version compatibility
