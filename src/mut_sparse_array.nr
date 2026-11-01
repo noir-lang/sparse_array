@@ -100,6 +100,17 @@ where
             //    }
         }
 
+        // 0 and `maximum` can be stored in more than one slot, so always return the sentinel
+        // (for `maximum`, the end sentinel is the only slot linking to 0xFFFFFFFF)
+        if target == 0 {
+            found_index = 0;
+        } else if target == self.maximum {
+            for i in 0..N + 2 {
+                if self.linked_keys[i] == 0xFFFFFFFF {
+                    found_index = i;
+                }
+            }
+        }
         (found, found_index)
     }
 
@@ -110,29 +121,57 @@ where
         );
     }
 
-    fn set(&mut self, idx: u32, value: T) {
-        let (found, found_index) = unsafe { self.search_for_key(idx) };
+    /**
+     * @brief check the result of `search_for_key(idx)`
+     * @details as in `SparseArray::get`, one pair of bounds covers both cases:
+     *          if `found`, `keys[found_index] <= idx <= keys[found_index]`;
+     *          if `!found`, `keys[found_index] < idx < keys[linked_keys[found_index]]`.
+     *          0 and `maximum` can be stored in more than one slot (unused slots hold key 0,
+     *          and either may also be an input key), so a found lookup of either must use its
+     *          sentinel slot: slot 0, or the end sentinel, the only slot linking to 0xFFFFFFFF.
+     *          A not-found lookup cannot use the end sentinel as predecessor (its link is out
+     *          of bounds), so nothing is ever inserted after it.
+     **/
+    fn assert_valid_lookup(self, idx: u32, found: bool, found_index: u32) {
+        let rhs_index = if found {
+            found_index
+        } else {
+            self.linked_keys[found_index]
+        };
+        let lhs = self.keys[found_index];
+        let rhs = self.keys[rhs_index];
+        assert(lhs + 1 - found as u32 <= idx, "MutSparseArray: idx is below the hinted range");
+        assert(idx <= rhs + found as u32 - 1, "MutSparseArray: idx is above the hinted range");
+        if found {
+            if idx == 0 {
+                assert(found_index == 0, "MutSparseArray: key 0 must use the start sentinel");
+            } else if idx == self.maximum {
+                assert(
+                    self.linked_keys[found_index] == 0xFFFFFFFF,
+                    "MutSparseArray: maximum must use the end sentinel",
+                );
+            }
+        }
+    }
 
+    fn set(&mut self, idx: u32, value: T) {
+        // Safety: the result is checked by `assert_valid_lookup` in `set_with_hint`
+        let (found, found_index) = unsafe { self.search_for_key(idx) };
+        self.set_with_hint(idx, value, found, found_index);
+    }
+
+    /**
+     * @brief `set`, given the result of `search_for_key(idx)`
+     * @details the hint is untrusted: every use of it is constrained here, so `set` only
+     *          has to supply it
+     **/
+    fn set_with_hint(&mut self, idx: u32, value: T, found: bool, found_index: u32) {
         // check can be unsafe because, if check fails, unsatisfiable constraints are created
         // due to an array overflow when accesing `self.linked_keys[self.tail_ptr]`
         unsafe { self.__check_if_can_insert(found) };
 
-        let lhs_index = found_index;
+        self.assert_valid_lookup(idx, found, found_index);
         let rhs_index = self.linked_keys[found_index];
-
-        // OK! So we have the following cases to check
-        // 1. if `found` then `self.keys[found_index] == idx`
-        // 2. if `!found` then `self.keys[found_index] < idx < self.keys[found_index + 1]
-        // how do we simplify these checks?
-        // case 1 can be converted to `self.keys[found_index] <= idx <= self.keys[found_index]
-        // case 2 can be modified to  `self.keys[found_index] + 1 <= idx <= self.keys[found_index + 1] - 1
-        // combine the two into the following single statement:
-        // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
-        let lhs = self.keys[lhs_index];
-        let rhs = self.keys[rhs_index];
-
-        assert(lhs + 1 - found as u32 <= idx);
-        assert(idx <= rhs + found as u32 - 1);
 
         // lhs points to tail_ptr
         // tail_ptr points to rhs
@@ -150,24 +189,19 @@ where
     }
 
     fn get(self, idx: u32) -> T {
+        // Safety: the result is checked by `assert_valid_lookup` in `get_with_hint`
         let (found, found_index) = unsafe { self.search_for_key(idx) };
+        self.get_with_hint(idx, found, found_index)
+    }
 
-        let lhs_index = found_index;
-        let rhs_index = self.linked_keys[found_index];
-
-        // OK! So we have the following cases to check
-        // 1. if `found` then `self.keys[found_index] == idx`
-        // 2. if `!found` then `self.keys[found_index] < idx < self.keys[found_index + 1]
-        // how do we simplify these checks?
-        // case 1 can be converted to `self.keys[found_index] <= idx <= self.keys[found_index]
-        // case 2 can be modified to  `self.keys[found_index] + 1 <= idx <= self.keys[found_index + 1] - 1
-        // combine the two into the following single statement:
-        // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
-        let lhs = self.keys[lhs_index];
-        let rhs = self.keys[rhs_index];
-        assert(lhs + 1 - found as u32 <= idx);
-        assert(idx <= rhs + found as u32 - 1);
-        let value_index = (lhs_index + 1) * found as u32;
+    /**
+     * @brief `get`, given the result of `search_for_key(idx)`
+     * @details the hint is untrusted: every use of it is constrained here, so `get` only
+     *          has to supply it
+     **/
+    fn get_with_hint(self, idx: u32, found: bool, found_index: u32) -> T {
+        self.assert_valid_lookup(idx, found, found_index);
+        let value_index = (found_index + 1) * found as u32;
         self.values[value_index]
     }
 }
@@ -246,6 +280,111 @@ mod test {
             MutSparseArray::create([1, 5, 7, 99999], [123, 456, 789, 101112], 100000);
         example.set(11, 444);
         assert(example.get(100000) == 0);
+    }
+
+    #[test]
+    fn test_overwrite_boundary_keys() {
+        let mut example: MutSparseArray<5, Field> =
+            MutSparseArray::create([5, 9, 0], [50, 90, 10], 10);
+        example.set(0, 11);
+        example.set(9, 99);
+        example.set(4, 44);
+
+        assert(example.get(0) == 11);
+        assert(example.get(9) == 99);
+        assert(example.get(4) == 44);
+        assert(example.get(3) == 0);
+    }
+
+    #[test]
+    fn test_maximum_not_in_input() {
+        let mut example: MutSparseArray<1, Field> = MutSparseArray::create([5], [50], 10);
+        assert(example.get(9) == 0);
+        example.set(9, 99);
+        assert(example.get(9) == 99);
+    }
+
+    // The tests below pass `get_with_hint` and `set_with_hint` a lookup result that the
+    // unconstrained search never returns. `get` and `set` do nothing but fetch the search
+    // result and call these functions, so a hint they reject is rejected by `get` and `set`.
+
+    #[test(should_fail_with = "MutSparseArray: idx is above the hinted range")]
+    fn test_get_rejects_absent_key_marked_found() {
+        let example: MutSparseArray<2, Field> = MutSparseArray::create([2, 8], [20, 80], 10);
+        // keys[1] = 2 and keys[linked_keys[1]] = 8 bracket 3; a found lookup would return 20
+        let _ = example.inner.get_with_hint(3, true, 1);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: idx is above the hinted range")]
+    fn test_set_rejects_absent_key_marked_found() {
+        let mut example: MutSparseArray<2, Field> = MutSparseArray::create([2, 8], [20, 80], 10);
+        // a found lookup would overwrite the value of key 2
+        example.inner.set_with_hint(3, 30, true, 1);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: key 0 must use the start sentinel")]
+    fn test_get_rejects_stale_zero_slot() {
+        let mut example: MutSparseArray<2, Field> = MutSparseArray::create([0, 8], [10, 80], 10);
+        example.set(0, 11);
+        // keys[1] = 0 is the input copy of the start sentinel, and still maps to 10
+        let _ = example.inner.get_with_hint(0, true, 1);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: key 0 must use the start sentinel")]
+    fn test_get_rejects_unused_slot() {
+        let example: MutSparseArray<4, Field> = MutSparseArray::create([0, 2], [10, 20], 10);
+        // keys[5] is unused, so holds key 0 and maps to the default value
+        let _ = example.inner.get_with_hint(0, true, 5);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: key 0 must use the start sentinel")]
+    fn test_set_rejects_stale_zero_slot() {
+        let mut example: MutSparseArray<2, Field> = MutSparseArray::create([0, 8], [10, 80], 10);
+        // writing through keys[1] would leave the start sentinel's value at 10
+        example.inner.set_with_hint(0, 11, true, 1);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: maximum must use the end sentinel")]
+    fn test_get_rejects_stale_maximum_slot() {
+        let mut example: MutSparseArray<2, Field> = MutSparseArray::create([2, 9], [20, 90], 10);
+        example.set(9, 99);
+        // keys[2] = 9 is the input copy of the end sentinel, and still maps to 90
+        let _ = example.inner.get_with_hint(9, true, 2);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: maximum must use the end sentinel")]
+    fn test_set_rejects_stale_maximum_slot() {
+        let mut example: MutSparseArray<2, Field> = MutSparseArray::create([2, 9], [20, 90], 10);
+        // writing through keys[2] would leave the end sentinel's value at 90
+        example.inner.set_with_hint(9, 99, true, 2);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: idx is below the hinted range")]
+    fn test_get_rejects_present_key_marked_absent() {
+        let example: MutSparseArray<2, Field> = MutSparseArray::create([2, 8], [20, 80], 10);
+        // keys[1] = 2; a not-found lookup would return the default value instead of 20
+        let _ = example.inner.get_with_hint(2, false, 1);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: idx is below the hinted range")]
+    fn test_set_rejects_present_key_marked_absent() {
+        let mut example: MutSparseArray<3, Field> = MutSparseArray::create([2, 8], [20, 80], 10);
+        // a not-found lookup would insert a second slot for key 2
+        example.inner.set_with_hint(2, 21, false, 1);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: idx is above the hinted range")]
+    fn test_get_rejects_wrong_gap() {
+        let example: MutSparseArray<2, Field> = MutSparseArray::create([2, 8], [20, 80], 10);
+        // keys[0] = 0 < 8, but keys[linked_keys[0]] = 2 is not above 8, which is present
+        let _ = example.inner.get_with_hint(8, false, 0);
+    }
+
+    #[test(should_fail_with = "MutSparseArray: idx is above the hinted range")]
+    fn test_set_rejects_wrong_gap() {
+        let mut example: MutSparseArray<3, Field> = MutSparseArray::create([2, 8], [20, 80], 10);
+        // inserting 5 after keys[0] = 0 would put it before key 2 in the linked list
+        example.inner.set_with_hint(5, 50, false, 0);
     }
 
     #[test(should_fail)]
