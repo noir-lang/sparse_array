@@ -81,6 +81,8 @@ struct MutSparseArrayBase<let N: u32, T, ComparisonFuncs> {
     linked_keys: [u32; N + 2],
     tail_ptr: u32,
     maximum: u32,
+    // slot of the end sentinel, which holds the canonical entry for `maximum`
+    maximum_index: u32,
 }
 
 struct U32RangeTraits {}

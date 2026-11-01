@@ -62,6 +62,7 @@ where
             values: [T::default(); N + 3],
             linked_keys: [0; N + 2],
             maximum: _maximum,
+            maximum_index: M + 1,
             tail_ptr: 0,
         };
 
@@ -100,6 +101,12 @@ where
             //    }
         }
 
+        // 0 and `maximum` can be stored in more than one slot, so always return the sentinel
+        if target == 0 {
+            found_index = 0;
+        } else if target == self.maximum {
+            found_index = self.maximum_index;
+        }
         (found, found_index)
     }
 
@@ -110,29 +117,37 @@ where
         );
     }
 
+    /**
+     * @brief check the result of `search_for_key(idx)`
+     * @details if `found`, `self.keys[found_index] == idx`, and 0 and `maximum` must use their
+     *          sentinel slots: unused slots also hold key 0, and either may also be an input key,
+     *          so other slots can hold stale values.
+     *          if `!found`, `self.keys[found_index] < idx < self.keys[self.linked_keys[found_index]]`
+     **/
+    fn assert_valid_lookup(self, idx: u32, found: bool, found_index: u32) {
+        if found {
+            assert(self.keys[found_index] == idx);
+            if idx == 0 {
+                assert(found_index == 0);
+            } else if idx == self.maximum {
+                assert(found_index == self.maximum_index);
+            }
+        } else {
+            assert(self.keys[found_index] < idx);
+            assert(idx < self.keys[self.linked_keys[found_index]]);
+        }
+    }
+
     fn set(&mut self, idx: u32, value: T) {
+        // Safety: the result is checked by `assert_valid_lookup`
         let (found, found_index) = unsafe { self.search_for_key(idx) };
 
         // check can be unsafe because, if check fails, unsatisfiable constraints are created
         // due to an array overflow when accesing `self.linked_keys[self.tail_ptr]`
         unsafe { self.__check_if_can_insert(found) };
 
-        let lhs_index = found_index;
+        self.assert_valid_lookup(idx, found, found_index);
         let rhs_index = self.linked_keys[found_index];
-
-        // OK! So we have the following cases to check
-        // 1. if `found` then `self.keys[found_index] == idx`
-        // 2. if `!found` then `self.keys[found_index] < idx < self.keys[found_index + 1]
-        // how do we simplify these checks?
-        // case 1 can be converted to `self.keys[found_index] <= idx <= self.keys[found_index]
-        // case 2 can be modified to  `self.keys[found_index] + 1 <= idx <= self.keys[found_index + 1] - 1
-        // combine the two into the following single statement:
-        // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
-        let lhs = self.keys[lhs_index];
-        let rhs = self.keys[rhs_index];
-
-        assert(lhs + 1 - found as u32 <= idx);
-        assert(idx <= rhs + found as u32 - 1);
 
         // lhs points to tail_ptr
         // tail_ptr points to rhs
@@ -150,24 +165,11 @@ where
     }
 
     fn get(self, idx: u32) -> T {
+        // Safety: the result is checked by `assert_valid_lookup`
         let (found, found_index) = unsafe { self.search_for_key(idx) };
 
-        let lhs_index = found_index;
-        let rhs_index = self.linked_keys[found_index];
-
-        // OK! So we have the following cases to check
-        // 1. if `found` then `self.keys[found_index] == idx`
-        // 2. if `!found` then `self.keys[found_index] < idx < self.keys[found_index + 1]
-        // how do we simplify these checks?
-        // case 1 can be converted to `self.keys[found_index] <= idx <= self.keys[found_index]
-        // case 2 can be modified to  `self.keys[found_index] + 1 <= idx <= self.keys[found_index + 1] - 1
-        // combine the two into the following single statement:
-        // `self.keys[found_index] + 1 - found <= idx <= self.keys[found_index + 1 - found] - 1 + found
-        let lhs = self.keys[lhs_index];
-        let rhs = self.keys[rhs_index];
-        assert(lhs + 1 - found as u32 <= idx);
-        assert(idx <= rhs + found as u32 - 1);
-        let value_index = (lhs_index + 1) * found as u32;
+        self.assert_valid_lookup(idx, found, found_index);
+        let value_index = (found_index + 1) * found as u32;
         self.values[value_index]
     }
 }
@@ -246,6 +248,58 @@ mod test {
             MutSparseArray::create([1, 5, 7, 99999], [123, 456, 789, 101112], 100000);
         example.set(11, 444);
         assert(example.get(100000) == 0);
+    }
+
+    #[test]
+    fn test_overwrite_boundary_keys() {
+        let mut example: MutSparseArray<5, Field> =
+            MutSparseArray::create([5, 9, 0], [50, 90, 10], 10);
+        example.set(0, 11);
+        example.set(9, 99);
+        example.set(4, 44);
+
+        assert(example.get(0) == 11);
+        assert(example.get(9) == 99);
+        assert(example.get(4) == 44);
+        assert(example.get(3) == 0);
+    }
+
+    #[test]
+    fn test_maximum_not_in_input() {
+        let mut example: MutSparseArray<1, Field> = MutSparseArray::create([5], [50], 10);
+        assert(example.get(9) == 0);
+        example.set(9, 99);
+        assert(example.get(9) == 99);
+    }
+
+    #[test(should_fail)]
+    fn test_lookup_rejects_absent_key_marked_found() {
+        let example: MutSparseArray<2, Field> = MutSparseArray::create([2, 8], [20, 80], 10);
+        // keys[1] = 2, and 2 <= 3 <= keys[linked_keys[1]] = 8
+        example.inner.assert_valid_lookup(3, true, 1);
+    }
+
+    #[test(should_fail)]
+    fn test_lookup_rejects_stale_zero_slot() {
+        let mut example: MutSparseArray<2, Field> = MutSparseArray::create([0, 8], [10, 80], 10);
+        example.set(0, 11);
+        // keys[1] = 0 still maps to the old value 10
+        example.inner.assert_valid_lookup(0, true, 1);
+    }
+
+    #[test(should_fail)]
+    fn test_lookup_rejects_unused_slot() {
+        let example: MutSparseArray<4, Field> = MutSparseArray::create([0, 2], [10, 20], 10);
+        // keys[5] is unused, so holds key 0 and maps to the default value
+        example.inner.assert_valid_lookup(0, true, 5);
+    }
+
+    #[test(should_fail)]
+    fn test_lookup_rejects_stale_maximum_slot() {
+        let mut example: MutSparseArray<2, Field> = MutSparseArray::create([2, 9], [20, 90], 10);
+        example.set(9, 99);
+        // keys[2] = 9 is the input copy of the end sentinel, and still maps to 90
+        example.inner.assert_valid_lookup(9, true, 2);
     }
 
     #[test(should_fail)]
