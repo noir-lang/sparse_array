@@ -29,26 +29,28 @@ sparse_array = { tag = "v0.1.0", git = "https://github.com/noir-lang/sparse_arra
 ### Usage
 
 ```rust
-use dep::sparse_array::{SparseArray, MutSparseArray}
+use sparse_array::{MutSparseArray, SparseArray};
 
 // a sparse array of size 10,000 with 10 nonzero values
-fn example_sparse_array(nonzero_indices: [Field; 10], nonzero_values: [Field; 10]) {
+fn example_sparse_array(nonzero_indices: [u32; 10], nonzero_values: [Field; 10]) {
     let sparse_array_size = 10000;
-    let array: SparseArray<10, Field> = SparseArray::create(nonzero_indices, nonzero_values, sparse_array_size);
+    let array: SparseArray<10, Field> =
+        SparseArray::create(nonzero_indices, nonzero_values, sparse_array_size);
 
     assert(array.get(999) == 12345);
 }
 
 // a mutable sparse array that can contain up to 10 nonzero values
-fn example_mut_sparse_array(initial_nonzero_indices: [Field; 9], initial_nonzero_values: [Field; 9]) {
+fn example_mut_sparse_array(initial_nonzero_indices: [u32; 9], initial_nonzero_values: [Field; 9]) {
     let sparse_array_size = 10000;
-    let mut array: MutSparseArray<10, Field> = MutSparseArray::create(nonzero_indices, nonzero_values, sparse_array_size);
+    let mut array: MutSparseArray<10, Field> =
+        MutSparseArray::create(initial_nonzero_indices, initial_nonzero_values, sparse_array_size);
 
     // update element 1234 to contain value 9999
     array.set(1234, 9999);
 
     // error, array can only contain 10 nonzero values
-    array.ser(10, 888);
+    array.set(10, 888);
 }
 ```
 
