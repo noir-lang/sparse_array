@@ -45,15 +45,15 @@ where
     }
 
     // insert values that map to our key start and endpoints
-    // if input_keys[0] = 0 then values[1] must equal input_values[0], so some
-    // conditional logic is required (same for input_keys[M-1])
+    // if 0 is an input key then it is keys[1], and values[1] must equal values[2], so some
+    // conditional logic is required (same for `maximum` and keys[M])
     let mut initial_value = T::default();
-    if (input_keys[0] == 0) {
-        initial_value = input_values[0];
+    if (keys[1] == 0) {
+        initial_value = values[2];
     }
     let mut final_value = T::default();
-    if (input_keys[M - 1] == maximum) {
-        final_value = input_values[M - 1];
+    if (keys[M] == maximum) {
+        final_value = values[M + 1];
     }
     values[1] = initial_value;
     values[M + 2] = final_value;
@@ -243,6 +243,18 @@ mod test {
         assert(example.get(1) == 10);
         assert(example.get(2) == 20);
         assert(example.get(3) == 30);
+    }
+
+    // 0 and `maximum` are also the start and end sentinels, which must hold the
+    // same values wherever those keys appear in the input
+    #[test]
+    fn test_sparse_lookup_unsorted_boundary_keys() {
+        let example = SparseArray::create([9, 5, 0], [90, 50, 10], 10);
+
+        assert(example.get(0) == 10);
+        assert(example.get(9) == 90);
+        assert(example.values[1] == 10);
+        assert(example.values[5] == 90);
     }
 
     #[test]
