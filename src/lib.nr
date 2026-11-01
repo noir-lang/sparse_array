@@ -29,39 +29,44 @@ where
     // for any valid index, we want to ensure the following is satified:
     // keys[X] <= index <= keys[X+1]
     // this requires us to sort the keys, and insert a startpoint and endpoint
-    let sorted_keys = sort_advanced(input_keys, __sort, assert_sorted);
 
     // insert start and endpoints
     keys[0] = 0;
-    for i in 0..M {
-        keys[i + 1] = sorted_keys.sorted[i];
-    }
     keys[M + 1] = maximum;
 
-    // sort_indices[i] is the sorted position of input key i, so write each
-    // input value to its key's sorted slot
-    for i in 0..M {
-        values[sorted_keys.sort_indices[i] + 2] = input_values[i];
-    }
+    // `sort_advanced` does not accept empty arrays, and there is nothing else to insert
+    if M > 0 {
+        let sorted_keys = sort_advanced(input_keys, __sort, assert_sorted);
 
-    // insert values that map to our key start and endpoints
-    // if 0 is an input key then it is keys[1], and values[1] must equal values[2], so some
-    // conditional logic is required (same for `maximum` and keys[M])
-    let mut initial_value = T::default();
-    if (keys[1] == 0) {
-        initial_value = values[2];
-    }
-    let mut final_value = T::default();
-    if (keys[M] == maximum) {
-        final_value = values[M + 1];
-    }
-    values[1] = initial_value;
-    values[M + 2] = final_value;
+        for i in 0..M {
+            keys[i + 1] = sorted_keys.sorted[i];
+        }
 
-    // perform boundary checks!
-    // because the keys are sorted, checking the largest key does not exceed
-    // `maximum` validates every key
-    assert(maximum >= sorted_keys.sorted[M - 1]);
+        // sort_indices[i] is the sorted position of input key i, so write each
+        // input value to its key's sorted slot
+        for i in 0..M {
+            values[sorted_keys.sort_indices[i] + 2] = input_values[i];
+        }
+
+        // insert values that map to our key start and endpoints
+        // if 0 is an input key then it is keys[1], and values[1] must equal values[2], so some
+        // conditional logic is required (same for `maximum` and keys[M])
+        let mut initial_value = T::default();
+        if (keys[1] == 0) {
+            initial_value = values[2];
+        }
+        let mut final_value = T::default();
+        if (keys[M] == maximum) {
+            final_value = values[M + 1];
+        }
+        values[1] = initial_value;
+        values[M + 2] = final_value;
+
+        // perform boundary checks!
+        // because the keys are sorted, checking the largest key does not exceed
+        // `maximum` validates every key
+        assert(maximum >= sorted_keys.sorted[M - 1]);
+    }
 }
 
 /**
@@ -257,6 +262,15 @@ mod test {
         assert(example.get(9) == 90);
         assert(example.values[1] == 10);
         assert(example.values[5] == 90);
+    }
+
+    #[test]
+    fn test_sparse_lookup_empty() {
+        let example: SparseArray<0, Field> = SparseArray::create([], [], 3);
+
+        for i in 0..3 {
+            assert(example.get(i) == 0);
+        }
     }
 
     #[test]

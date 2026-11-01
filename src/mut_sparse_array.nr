@@ -265,6 +265,26 @@ mod test {
     }
 
     #[test]
+    fn test_create_empty() {
+        let mut example: MutSparseArray<3, Field> = MutSparseArray::create([], [], 3);
+        for i in 0..3 {
+            assert(example.get(i) == 0);
+        }
+
+        example.set(1, 10);
+        example.set(0, 20);
+        example.set(2, 30);
+        assert(example.get(0) == 20);
+        assert(example.get(1) == 10);
+        assert(example.get(2) == 30);
+
+        // size 1, so 0 is also `maximum`
+        let mut example: MutSparseArray<0, Field> = MutSparseArray::create([], [], 1);
+        example.set(0, 40);
+        assert(example.get(0) == 40);
+    }
+
+    #[test]
     fn test_maximum_not_in_input() {
         let mut example: MutSparseArray<1, Field> = MutSparseArray::create([5], [50], 10);
         assert(example.get(9) == 0);
