@@ -176,15 +176,15 @@ impl<let N: u32, T> MutSparseArray<N, T>
 where
     T: std::default::Default,
 {
-    pub(crate) fn create<let M: u32>(keys: [u32; M], values: [T; M], size: u32) -> Self {
+    pub fn create<let M: u32>(keys: [u32; M], values: [T; M], size: u32) -> Self {
         Self { inner: MutSparseArrayBase::create(keys, values, size) }
     }
 
-    fn get(self, idx: u32) -> T {
+    pub fn get(self, idx: u32) -> T {
         self.inner.get(idx)
     }
 
-    fn set(&mut self, idx: u32, value: T) {
+    pub fn set(&mut self, idx: u32, value: T) {
         self.inner.set(idx, value);
     }
 
