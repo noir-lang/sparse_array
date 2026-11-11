@@ -112,7 +112,7 @@ where
     /**
      * @brief construct a SparseArray
      **/
-    pub(crate) fn create(_keys: [u32; N], _values: [T; N], size: u32) -> Self {
+    pub fn create(_keys: [u32; N], _values: [T; N], size: u32) -> Self {
         assert(size >= 1);
         let _maximum = size - 1;
         let mut r: Self =
@@ -151,7 +151,7 @@ where
      * @brief return element `idx` from the sparse array
      * @details cost is 14.5 gates per lookup
      **/
-    fn get(self, idx: u32) -> T {
+    pub fn get(self, idx: u32) -> T {
         let (found, found_index) = unsafe { self.search_for_key(idx) };
 
         // OK! So we have the following cases to check
